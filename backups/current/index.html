@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>사내 복리후생 통합 상담</title>
+  <style>
+    :root{--bg:#f7f7f8;--ink:#202123;--muted:#6b7280;--line:#e5e7eb;--accent:#10a37f;--card:#fff;--warn:#fff7ed}
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:Arial,"Noto Sans KR",sans-serif}
+    .app{min-height:100vh;display:flex;flex-direction:column}.top{height:62px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 24px;gap:12px}
+    .mark{width:30px;height:30px;border-radius:9px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700}.brand{font-weight:700}.status{margin-left:auto;color:var(--muted);font-size:13px}
+    main{width:min(920px,calc(100% - 32px));margin:0 auto;padding:44px 0 150px;flex:1}.hero{text-align:center;margin:20px 0 36px}.hero h1{font-size:30px;margin:0 0 12px}.hero p{color:var(--muted);margin:0}
+    .chat{display:flex;flex-direction:column;gap:18px}.message{display:flex;gap:12px;line-height:1.7}.avatar{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;flex:0 0 32px;font-size:13px;font-weight:700}.user .avatar{background:#dbeafe;color:#1d4ed8}.assistant .avatar{background:var(--accent);color:#fff}.bubble{max-width:calc(100% - 44px);white-space:pre-wrap}.user .bubble{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 16px}.assistant .bubble{padding-top:3px;flex:1}
+    .evidence{display:grid;gap:10px;margin-top:16px}.evidence-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}.evidence-title{font-weight:700;margin-bottom:6px}.meta{font-size:12px;color:var(--muted)}.tag{display:inline-block;background:#ecfdf5;color:#047857;border-radius:999px;padding:3px 8px;font-size:12px;margin:8px 6px 0 0}.notice{background:var(--warn);border:1px solid #fed7aa;border-radius:10px;padding:12px 14px;margin-top:12px;color:#9a3412}
+    .empty{text-align:center;color:var(--muted);padding:50px 0}.composer-wrap{position:fixed;bottom:0;left:0;right:0;background:linear-gradient(transparent,var(--bg) 24%);padding:32px 16px 22px}.composer{width:min(920px,100%);margin:auto;background:#fff;border:1px solid #d1d5db;border-radius:18px;box-shadow:0 3px 15px #00000012;display:flex;align-items:flex-end;padding:10px 12px 10px 16px}.composer textarea{border:0;outline:0;resize:none;flex:1;min-height:26px;max-height:130px;font:inherit;line-height:1.5;padding:5px 0}.send{border:0;background:#111827;color:#fff;border-radius:10px;padding:9px 14px;cursor:pointer;font-weight:700}.send:disabled{background:#d1d5db;cursor:not-allowed}.hint{width:min(920px,100%);margin:8px auto 0;text-align:center;color:var(--muted);font-size:12px}
+    @media(max-width:600px){main{padding-top:28px}.hero h1{font-size:24px}.status{display:none}.top{padding:0 16px}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="top"><div class="mark">복</div><div class="brand">사내 복리후생 통합 상담</div><div class="status">규정 기반 상담</div></header>
+    <main>
+      <section class="hero"><h1>무엇이 궁금하신가요?</h1><p>국내·외 출장 및 부임, 경조금, 숙소지원금, 동호회 관련 내용을 자유롭게 질문해 주세요.</p></section>
+      <section id="chat" class="chat"><div class="empty">질문을 입력하면 관련 규정을 찾아 답변해 드립니다.</div></section>
+    </main>
+    <div class="composer-wrap">
+      <form id="form" class="composer"><textarea id="question" rows="1" placeholder="예: 서울 외 지역으로 부임하면 숙소지원금을 받을 수 있나요?" aria-label="질문 입력"></textarea><button id="send" class="send" type="submit">전송</button></form>
+      <div class="hint">답변은 참고용이며 최종 승인·지급 여부는 담당 부서의 규정 및 서류 검토에 따릅니다.</div>
+    </div>
+  </div>
+  <script>
+    // 규정의 핵심 검색 단위입니다. 실제 운영에서는 원문 문서 색인 결과로 교체합니다.
+    const rules = [
+      {name:'경조금 지급기준', code:'PCR-B-211 Rev. 13', date:'2026-03-04', keys:['경조','결혼','출산','사망','조의','축의','가족관계','청첩장','경조금'], facts:['본인 결혼 200만원, 자녀 결혼 30만원, 본인·배우자 형제자매 결혼 20만원입니다.','출산장려금은 첫째 300만원, 둘째 700만원, 셋째 이상 1,000만원이며 사내부부는 1명에게만 지급합니다.','사망 경조금은 대상 관계에 따라 30만원부터 500만원까지 지급하며, 신청 시 관계를 증명하는 서류가 필요합니다.','경조금 청구권은 사유 발생일로부터 3개월 이내 행사해야 합니다.','급여 지급이 정지된 자는 지급 대상에서 제외되며, 해당 부서장이 지급을 승인합니다.'], docs:['경조금 지급기준 5.2 지급기준','경조금 지급기준 5.3 서류제출','경조금 지급기준 5.6 유효기간']},
+      {name:'동호회 관리 규정', code:'내부 운영 기준', date:'기준 문서 확인 필요', keys:['동호회','동아리','활동보조금','회원','회장','총무','행사','영수증','활동사진'], facts:['동호회 등록 최소 인원은 5명이며, 신규 등록은 노사협력그룹과 사전 협의가 필요합니다.','정기지원은 분기 1회 이상 활동 시 분기 단위 인당 3만원, 최대 30만원입니다.','특별지원은 회사를 대표하는 사외 행사 등에 대해 연간 2회, 인당 1만원, 최대 30만원입니다.','활동보조금 지급에는 활동보고서, 영수증, 활동사진, 참석자 명단이 필요합니다.','신규 등록 동호회는 등록 3개월 이후부터 지원하며, 동일 분야 이중 가입은 제한될 수 있습니다.'], docs:['동호회 관리 규정 5.1~5.4 결성·가입','동호회 관리 규정 7 활동보조금 지급 기준','동호회 관리 규정 7.2 서류 제출']},
+      {name:'숙소지원금 운영 기준', code:'PCR-B-219 Rev. 1', date:'2026-03-04', keys:['숙소','주거','월세','전세','부임','타지역','무주택','단신','임대','통근버스','40만원','60만원'], facts:['지원 대상은 타지역 출신의 무주택 단신부임 직원이며, 신규 채용·부임·그룹사 인력교류자가 포함될 수 있습니다.','신규 채용은 서울 외 지역에서 발령일로부터 5년간 월 40만원을 지원합니다.','신규 부임은 서울 외 지역 월 40만원, 서울 월 60만원을 발령일로부터 3년간 지원합니다.','월세는 월 차임만 지원하고 관리비·공과금은 제외합니다. 전세는 전세금 1,000만원당 월 10만원 기준입니다.','발령 월 다음 달부터 6개월 이내 신청하지 않으면 자격을 상실할 수 있으며, P8 이상 임원·파견비 대상자 등은 제외될 수 있습니다.','타지역이어도 통근버스가 운행되면 지급이 중단될 수 있습니다.'], docs:['숙소지원금 운영 기준 5.1 지원내용','숙소지원금 운영 기준 5.2~5.4 대상·제외·지원기준','숙소지원금 운영 기준 5.6 제출서류']},
+      {name:'여비관리기준', code:'여비관리기준', date:'기준 문서 확인 필요', keys:['여비','출장','국내출장','해외출장','국외','부임비','이전비','교통비','교통','숙박비','소액경비','택시','렌터카','유류비','연비','교육','교육연수','연수','포항','서울','토요일','주말','기차','기차비','철도','열차','자가차량'], facts:['국내 출장의 전 직원 소액경비는 1일 5만원, 숙박비는 실비 10만원 한도 기준이 적용될 수 있습니다.','교육·연수 참석도 출장 목적과 이동 경로가 확인되면 국내여비 기준을 검토할 수 있습니다.','자가차량 이용 시 유류비·통행료·감가상각비를 기준에 따라 실비 지급하며, 거리와 차량 유형에 따라 산식이 달라집니다.','왕복 120km 이상 근거리 출장에는 소액경비 전액, 50km 이상은 1/2, 50km 미만은 미지급 기준이 있습니다.','부임비와 이전비는 직급·이동 지역·자택 여부에 따라 달라지며, 부임 후 6개월 이내 1회 신청 기준이 있습니다.','토요일·주말 이동 여부만으로 기차비 지급 여부를 확정할 수 없으며, 출장명령·교육 참석 승인·실제 이동 구간 확인이 필요합니다.'], docs:['여비관리기준 5.10 국내여비','여비관리기준 5.11 부임비 및 이전비','여비관리기준 5.14 국내여비 특례','여비관리기준 별첨 1~4 지급기준']}
+    ];
+
+    const form=document.querySelector('#form'), input=document.querySelector('#question'), chat=document.querySelector('#chat'), send=document.querySelector('#send');
+    input.addEventListener('input',()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,130)+'px';send.disabled=!input.value.trim()});
+    form.addEventListener('submit',async e=>{e.preventDefault();const q=input.value.trim();if(!q)return;addUser(q);input.value='';input.style.height='auto';send.disabled=true;addTyping();try{const response=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q})});const data=await response.json();removeTyping();if(!response.ok)throw new Error(data.error||'상담 처리 중 오류가 발생했습니다.');addAnswer(data.answer,data.evidence)}catch(error){removeTyping();addError(error.message)}finally{send.disabled=false}});
+
+    function addUser(text){const empty=chat.querySelector('.empty');if(empty)empty.remove();chat.insertAdjacentHTML('beforeend',`<div class="message user"><div class="avatar">나</div><div class="bubble">${escapeHtml(text)}</div></div>`);window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'})}
+    function addTyping(){chat.insertAdjacentHTML('beforeend',`<div id="typing" class="message assistant"><div class="avatar">AI</div><div class="bubble">답변을 준비하고 있습니다...</div></div>`)}
+    function removeTyping(){const typing=document.querySelector('#typing');if(typing)typing.remove()}
+    function addError(text){chat.insertAdjacentHTML('beforeend',`<div class="message assistant"><div class="avatar">AI</div><div class="bubble"><div class="notice">⚠ ${escapeHtml(text)}</div></div></div>`)}
+    function addAnswer(answer,evidence){
+      const cards=(evidence||[]).map(x=>`<div class="evidence-card"><div class="evidence-title">${escapeHtml(x.file)}</div><div class="meta">검색 근거 점수: ${x.score}</div><div class="meta">${escapeHtml(x.text.slice(0,240))}${x.text.length>240?'...':''}</div></div>`).join('');
+      chat.insertAdjacentHTML('beforeend',`<div class="message assistant"><div class="avatar">AI</div><div class="bubble">${escapeHtml(answer)}<div class="evidence"><div class="meta">검색된 규정 근거</div>${cards||'<div class="evidence-card">관련 근거를 찾지 못했습니다.</div>'}</div></div></div>`);window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
+      return;
+      /* 기존 브라우저 내장 답변 로직은 백엔드 LLM 답변으로 대체되었습니다. */
+      /*
+      const normalized=q.toLowerCase();const ranked=rules.map(r=>({r,score:r.keys.reduce((n,k)=>n+(normalized.includes(k.toLowerCase())?1:0),0)})).sort((a,b)=>b.score-a.score);const hits=ranked.filter(x=>x.score>0).slice(0,3);
+      let body, notice='';
+      if(!hits.length){body='말씀하신 상황과 직접 연결되는 규정을 아직 특정하지 못했습니다. 어떤 비용이나 지원을 확인하려는지, 사용일·출장 목적·대상 등을 조금만 더 알려주세요.';notice='현재 정보만으로는 규정 근거가 부족해 담당 부서 확인이 필요합니다.'}
+      else {const primary=hits[0].r;let facts=primary.facts.filter(f=>{const terms=(f.match(/[가-힣A-Za-z0-9]+/g)||[]);return terms.some(t=>normalized.includes(t.toLowerCase()))});if(!facts.length)facts=primary.facts.slice(0,2);facts=facts.slice(0,3);body=buildConversationalAnswer(normalized,hits,facts);if(hits.length>1)notice='질문에 여러 규정이 연결되었습니다. 아래 규정의 조건을 함께 확인해 주세요.';if(primary.name==='여비관리기준'&&(normalized.includes('토요일')||normalized.includes('주말')||normalized.includes('교육'))){notice='주말·교육이라는 사실만으로 지급 여부를 확정할 수 없습니다. 출장명령 또는 교육 참석 승인 여부와 실제 이동 구간을 확인해야 합니다.'}}
+      const cards=hits.map(x=>`<div class="evidence-card"><div class="evidence-title">${x.r.name}</div><div class="meta">문서번호: ${x.r.code} · 시행일: ${x.r.date}</div>${x.r.docs.map(d=>`<span class="tag">${d}</span>`).join('')}</div>`).join('');
+      chat.insertAdjacentHTML('beforeend',`<div class="message assistant"><div class="avatar">AI</div><div class="bubble">${escapeHtml(body)}${notice?`<div class="notice">⚠ ${escapeHtml(notice)}</div>`:''}<div class="evidence"><div class="meta">확인한 규정 근거</div>${cards||'<div class="evidence-card">검색된 근거 없음</div>'}</div></div></div>`);window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});send.disabled=!input.value.trim();
+      */
+    }
+    function buildConversationalAnswer(q,hits,facts){
+      const primary=hits[0].r;
+      if(primary.name==='여비관리기준'&&(q.includes('기차')||q.includes('철도')||q.includes('교통')||q.includes('교육'))){
+        return `질문하신 상황은 여비관리기준의 국내여비 항목을 먼저 확인해야 합니다.\n\n토요일에 이동했다는 이유만으로 기차비 지급 여부가 정해지지는 않습니다. 교육 참석이 회사의 출장 또는 교육 일정으로 승인되었고, 실제 이동 구간이 확인되면 교통비 지급 기준을 검토할 수 있습니다.\n\n현재 확인되는 관련 기준은 다음과 같습니다.\n${facts.map(x=>'• '+x).join('\n')}\n\n정확히 확인하려면 교육 참석 승인 여부, 출장명령 여부, 출발지·도착지, 이동일과 열차표 영수증이 필요합니다.`;
+      }
+      return `${primary.name} 기준을 확인해 보았습니다.\n\n${facts.map(x=>'• '+x).join('\n')}\n\n질문하신 상황에 정확히 적용하려면 대상·일자·소속·직급·금액 등 추가 정보가 필요할 수 있습니다. 해당 정보가 있으면 조건을 하나씩 대조해 드리겠습니다.`;
+    }
+    function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+  </script>
+</body>
+</html>

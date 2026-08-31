@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Reference &amp; Context Viewer</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700&amp;family=JetBrains+Mono:wght@400&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "background": "#f9f9f9",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-fixed": "#e2e2e2",
+                        "inverse-on-surface": "#f1f1f1",
+                        "on-error": "#ffffff",
+                        "outline-variant": "#c3c6d8",
+                        "on-surface-variant": "#424656",
+                        "primary-fixed-dim": "#b4c5ff",
+                        "on-primary-fixed": "#00174c",
+                        "on-tertiary-container": "#f3f3ff",
+                        "primary": "#004ccd",
+                        "on-secondary-container": "#636465",
+                        "inverse-primary": "#b4c5ff",
+                        "surface-bright": "#f9f9f9",
+                        "on-secondary-fixed": "#1a1c1c",
+                        "on-surface": "#1a1c1c",
+                        "surface-tint": "#0052dd",
+                        "on-tertiary-fixed-variant": "#1a3ca8",
+                        "on-error-container": "#93000a",
+                        "primary-fixed": "#dbe1ff",
+                        "tertiary": "#304db9",
+                        "on-secondary": "#ffffff",
+                        "primary-container": "#0f62fe",
+                        "error-container": "#ffdad6",
+                        "surface-dim": "#dadada",
+                        "tertiary-container": "#4b67d3",
+                        "error": "#ba1a1a",
+                        "on-primary-fixed-variant": "#003da9",
+                        "tertiary-fixed": "#dde1ff",
+                        "secondary-fixed-dim": "#c6c6c6",
+                        "surface-container": "#eeeeee",
+                        "surface": "#f9f9f9",
+                        "inverse-surface": "#2f3131",
+                        "tertiary-fixed-dim": "#b8c4ff",
+                        "secondary": "#5d5f5f",
+                        "on-tertiary-fixed": "#001453",
+                        "on-secondary-fixed-variant": "#454747",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-high": "#e8e8e8",
+                        "surface-variant": "#e2e2e2",
+                        "on-primary-container": "#f3f3ff",
+                        "on-primary": "#ffffff",
+                        "surface-container-low": "#f3f3f3",
+                        "on-background": "#1a1c1c",
+                        "outline": "#737687",
+                        "secondary-container": "#e2e2e2",
+                        "surface-container-highest": "#e2e2e2"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "stack-xs": "4px",
+                        "stack-sm": "12px",
+                        "stack-md": "24px",
+                        "margin-desktop": "40px",
+                        "base": "8px",
+                        "stack-lg": "48px",
+                        "gutter": "24px",
+                        "margin-mobile": "16px",
+                        "container-max-width": "1280px"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["Hanken Grotesk"],
+                        "body-sm": ["Hanken Grotesk"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "headline-md": ["Hanken Grotesk"],
+                        "label-md": ["Hanken Grotesk"],
+                        "code-sm": ["JetBrains Mono"],
+                        "headline-lg-mobile": ["Hanken Grotesk"],
+                        "body-md": ["Hanken Grotesk"],
+                        "body-lg": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "label-md": ["14px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "code-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        .highlight-text {
+            background-color: #dbe1ff; /* primary-fixed */
+            padding: 2px 4px;
+            border-radius: 4px;
+            color: #00174c; /* on-primary-fixed */
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body class="bg-background min-h-screen text-on-background font-body-md antialiased flex flex-col">
+<!-- TopAppBar -->
+<header class="bg-background text-primary font-headline-md text-headline-md w-full sticky top-0 z-50 border-b border-outline-variant flat no shadows flex items-center justify-between px-margin-mobile h-16 w-full hidden md:flex">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-sm" data-icon="smart_toy">smart_toy</span>
+</div>
+<span class="font-headline-md text-headline-md font-bold tracking-tight">Benefits AI</span>
+</div>
+<nav class="flex gap-6">
+<a class="text-on-surface-variant hover:bg-surface-container transition-colors px-3 py-2 rounded-lg flex items-center gap-2" href="#">
+<span class="material-symbols-outlined" data-icon="chat_bubble">chat_bubble</span> Chat
+            </a>
+<a class="text-on-surface-variant hover:bg-surface-container transition-colors px-3 py-2 rounded-lg flex items-center gap-2" href="#">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span> Benefits
+            </a>
+<a class="text-primary bg-primary-container text-on-primary-container px-3 py-2 rounded-lg flex items-center gap-2" href="#">
+<span class="material-symbols-outlined" data-icon="description" style="font-variation-settings: 'FILL' 1;">description</span> Documents
+            </a>
+</nav>
+<button class="w-10 h-10 rounded-full hover:bg-surface-container transition-colors flex items-center justify-center text-on-surface-variant active:opacity-80 transition-opacity">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+</header>
+<!-- TopAppBar Mobile -->
+<header class="bg-background text-primary font-headline-md text-headline-md w-full sticky top-0 z-50 border-b border-outline-variant flat no shadows flex items-center justify-between px-margin-mobile h-16 w-full md:hidden">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-sm" data-icon="smart_toy">smart_toy</span>
+</div>
+<span class="font-headline-lg-mobile text-headline-lg-mobile font-bold tracking-tight">Benefits AI</span>
+</div>
+<button class="w-10 h-10 rounded-full hover:bg-surface-container transition-colors flex items-center justify-center text-on-surface-variant active:opacity-80 transition-opacity">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow flex justify-center py-stack-md px-margin-mobile md:px-margin-desktop w-full max-w-container-max-width mx-auto">
+<!-- Context Viewer Container -->
+<div class="w-full max-w-[900px] flex flex-col gap-stack-md">
+<!-- Breadcrumbs / Back Navigation (implied context) -->
+<div class="flex items-center gap-2 text-on-surface-variant font-body-sm text-body-sm mb-stack-xs">
+<button class="hover:text-primary transition-colors flex items-center">
+<span class="material-symbols-outlined text-sm mr-1" data-icon="arrow_back">arrow_back</span>
+                    Back to Chat
+                </button>
+<span>/</span>
+<span>Document Reference</span>
+</div>
+<!-- Bento Grid Layout for Viewer -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+<!-- Metadata Sidebar (Col 1-4) -->
+<aside class="md:col-span-4 flex flex-col gap-stack-sm">
+<div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-stack-sm shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+<div class="flex items-start gap-3 mb-stack-sm">
+<div class="w-10 h-10 rounded-lg bg-tertiary-container text-on-tertiary-container flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined" data-icon="menu_book">menu_book</span>
+</div>
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface">2024 Employee Handbook</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Human Resources Dept.</p>
+</div>
+</div>
+<hr class="border-outline-variant my-stack-sm"/>
+<div class="flex flex-col gap-stack-xs font-body-sm text-body-sm">
+<div class="flex justify-between">
+<span class="text-on-surface-variant">Effective Date:</span>
+<span class="font-semibold text-on-surface">Jan 1, 2024</span>
+</div>
+<div class="flex justify-between">
+<span class="text-on-surface-variant">Version:</span>
+<span class="font-semibold text-on-surface">v2.1</span>
+</div>
+<div class="flex justify-between">
+<span class="text-on-surface-variant">Relevance:</span>
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed-variant font-label-md text-[10px]">High Match</span>
+</div>
+</div>
+<div class="mt-stack-md">
+<button class="w-full py-2 px-4 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:bg-on-primary-fixed transition-colors flex justify-center items-center gap-2 shadow-[0_2px_4px_rgba(0,76,205,0.2)]">
+<span class="material-symbols-outlined text-sm" data-icon="picture_as_pdf">picture_as_pdf</span>
+                                View Full PDF
+                            </button>
+</div>
+</div>
+<!-- AI Context Snippet -->
+<div class="glass-panel rounded-xl p-stack-sm relative overflow-hidden">
+<div class="absolute top-0 left-0 w-1 h-full bg-primary"></div>
+<div class="flex items-center gap-2 mb-2">
+<span class="material-symbols-outlined text-primary text-sm" data-icon="auto_awesome">auto_awesome</span>
+<span class="font-label-md text-label-md text-primary">AI Summary</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface">
+                            Based on your query, full-time employees are eligible for up to $5,250 annually for approved tuition expenses after 6 months of continuous service.
+                        </p>
+</div>
+</aside>
+<!-- Document Snippet Viewer (Col 5-12) -->
+<section class="md:col-span-8">
+<div class="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-[0_4px_12px_rgba(0,0,0,0.03)] h-full flex flex-col overflow-hidden">
+<!-- Toolbar -->
+<div class="bg-surface-container px-4 py-2 flex justify-between items-center border-b border-outline-variant">
+<div class="font-code-sm text-code-sm text-on-surface-variant flex items-center gap-2">
+<span class="material-symbols-outlined text-sm" data-icon="find_in_page">find_in_page</span>
+                                Page 42 of 128
+                            </div>
+<div class="flex gap-2">
+<button class="w-8 h-8 rounded hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant transition-colors">
+<span class="material-symbols-outlined text-sm" data-icon="zoom_out">zoom_out</span>
+</button>
+<button class="w-8 h-8 rounded hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant transition-colors">
+<span class="material-symbols-outlined text-sm" data-icon="zoom_in">zoom_in</span>
+</button>
+</div>
+</div>
+<!-- Snippet Content Area -->
+<div class="p-6 md:p-8 bg-white flex-grow relative overflow-y-auto">
+<!-- Page simulation subtle shadow -->
+<div class="absolute inset-x-8 top-0 h-4 bg-gradient-to-b from-[rgba(0,0,0,0.02)] to-transparent pointer-events-none"></div>
+<div class="max-w-prose mx-auto">
+<h3 class="font-headline-md text-headline-md text-on-surface mb-4">7.3 Educational Assistance Program</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mb-4 leading-relaxed">
+                                    The Company encourages employees to further their education in disciplines related to their current roles or future career paths within the organization. To support this, we offer a comprehensive Educational Assistance Program.
+                                </p>
+<h4 class="font-label-md text-label-md text-on-surface mb-2 mt-6 uppercase tracking-wider">Eligibility</h4>
+<p class="font-body-md text-body-md text-on-surface-variant mb-4 leading-relaxed">
+                                    All regular full-time employees who have completed at least six (6) months of continuous service are eligible to participate in the program. Courses must be taken at an accredited institution and must be pre-approved by the employee's direct supervisor and Human Resources.
+                                </p>
+<div class="relative my-6 p-1 border-l-4 border-primary bg-primary-fixed/30 rounded-r-lg">
+<h4 class="font-label-md text-label-md text-on-surface mb-2 px-3 pt-2 uppercase tracking-wider">Reimbursement Limits</h4>
+<p class="font-body-md text-body-md text-on-surface-variant mb-2 px-3 pb-2 leading-relaxed">
+<span class="highlight-text">Eligible employees may receive reimbursement for tuition, books, and required fees up to a maximum of $5,250 per calendar year.</span> Reimbursement is contingent upon the successful completion of the course with a grade of "C" or better (or "Pass" in a pass/fail grading system).
+                                    </p>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant mb-4 leading-relaxed">
+                                    Employees receiving educational assistance must remain employed with the Company for a minimum of twelve (12) months following the completion of the reimbursed course. Voluntary termination prior to this period may require repayment of the reimbursed funds.
+                                </p>
+</div>
+</div>
+</div>
+</section>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="bg-surface-container-lowest text-primary font-label-md text-label-md fixed bottom-0 w-full z-50 border-t border-outline-variant flat no shadows flex justify-around items-center h-20 pb-safe w-full px-2 md:hidden">
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-5 py-1 hover:text-primary transition-colors active:scale-95 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="chat_bubble">chat_bubble</span>
+<span>Chat</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-5 py-1 hover:text-primary transition-colors active:scale-95 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span>Benefits</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-full px-5 py-1 hover:text-primary transition-colors active:scale-95 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="description" style="font-variation-settings: 'FILL' 1;">description</span>
+<span>Documents</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-5 py-1 hover:text-primary transition-colors active:scale-95 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="person">person</span>
+<span>Profile</span>
+</a>
+</nav>
+</body></html>

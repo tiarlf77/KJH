@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>My Documents - Benefits AI</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700&amp;family=JetBrains+Mono:wght@400&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "background": "#f9f9f9",
+                      "surface-container-lowest": "#ffffff",
+                      "secondary-fixed": "#e2e2e2",
+                      "inverse-on-surface": "#f1f1f1",
+                      "on-error": "#ffffff",
+                      "outline-variant": "#c3c6d8",
+                      "on-surface-variant": "#424656",
+                      "primary-fixed-dim": "#b4c5ff",
+                      "on-primary-fixed": "#00174c",
+                      "on-tertiary-container": "#f3f3ff",
+                      "primary": "#004ccd",
+                      "on-secondary-container": "#636465",
+                      "inverse-primary": "#b4c5ff",
+                      "surface-bright": "#f9f9f9",
+                      "on-secondary-fixed": "#1a1c1c",
+                      "on-surface": "#1a1c1c",
+                      "surface-tint": "#0052dd",
+                      "on-tertiary-fixed-variant": "#1a3ca8",
+                      "on-error-container": "#93000a",
+                      "primary-fixed": "#dbe1ff",
+                      "tertiary": "#304db9",
+                      "on-secondary": "#ffffff",
+                      "primary-container": "#0f62fe",
+                      "error-container": "#ffdad6",
+                      "surface-dim": "#dadada",
+                      "tertiary-container": "#4b67d3",
+                      "error": "#ba1a1a",
+                      "on-primary-fixed-variant": "#003da9",
+                      "tertiary-fixed": "#dde1ff",
+                      "secondary-fixed-dim": "#c6c6c6",
+                      "surface-container": "#eeeeee",
+                      "surface": "#f9f9f9",
+                      "inverse-surface": "#2f3131",
+                      "tertiary-fixed-dim": "#b8c4ff",
+                      "secondary": "#5d5f5f",
+                      "on-tertiary-fixed": "#001453",
+                      "on-secondary-fixed-variant": "#454747",
+                      "on-tertiary": "#ffffff",
+                      "surface-container-high": "#e8e8e8",
+                      "surface-variant": "#e2e2e2",
+                      "on-primary-container": "#f3f3ff",
+                      "on-primary": "#ffffff",
+                      "surface-container-low": "#f3f3f3",
+                      "on-background": "#1a1c1c",
+                      "outline": "#737687",
+                      "secondary-container": "#e2e2e2",
+                      "surface-container-highest": "#e2e2e2"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "stack-xs": "4px",
+                      "stack-sm": "12px",
+                      "stack-md": "24px",
+                      "margin-desktop": "40px",
+                      "base": "8px",
+                      "stack-lg": "48px",
+                      "gutter": "24px",
+                      "margin-mobile": "16px",
+                      "container-max-width": "1280px"
+              },
+              "fontFamily": {
+                      "display-lg": [
+                              "Hanken Grotesk"
+                      ],
+                      "body-sm": [
+                              "Hanken Grotesk"
+                      ],
+                      "headline-lg": [
+                              "Hanken Grotesk"
+                      ],
+                      "headline-md": [
+                              "Hanken Grotesk"
+                      ],
+                      "label-md": [
+                              "Hanken Grotesk"
+                      ],
+                      "code-sm": [
+                              "JetBrains Mono"
+                      ],
+                      "headline-lg-mobile": [
+                              "Hanken Grotesk"
+                      ],
+                      "body-md": [
+                              "Hanken Grotesk"
+                      ],
+                      "body-lg": [
+                              "Hanken Grotesk"
+                      ]
+              },
+              "fontSize": {
+                      "display-lg": [
+                              "48px",
+                              {
+                                      "lineHeight": "56px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-sm": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-md": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "label-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "code-sm": [
+                              "13px",
+                              {
+                                      "lineHeight": "18px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "400"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+</head>
+<body class="bg-background text-on-background min-h-screen flex flex-col font-body-md">
+<!-- TopAppBar -->
+<header class="bg-background text-primary font-headline-md text-headline-md w-full sticky top-0 z-50 border-b border-outline-variant flat no shadows flex items-center justify-between px-margin-mobile h-16 w-full">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">robot_2</span>
+<span class="font-headline-md text-headline-md text-primary font-bold tracking-tight">Benefits AI</span>
+</div>
+<button class="text-on-surface-variant hover:bg-surface-container transition-colors active:opacity-80 rounded-full p-2 flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+</header>
+<!-- Main Content -->
+<main class="flex-grow flex flex-col md:flex-row w-full max-w-container-max-width mx-auto px-margin-mobile md:px-margin-desktop py-stack-md gap-gutter pb-24 md:pb-stack-md">
+<!-- Sidebar / Filter (Desktop) & Search -->
+<aside class="w-full md:w-1/4 flex flex-col gap-stack-sm">
+<div class="sticky top-24">
+<h1 class="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg mb-stack-sm">My Documents</h1>
+<div class="relative w-full mb-stack-md">
+<span class="material-symbols-outlined absolute left-3 top-1/2 transform -translate-y-1/2 text-outline">search</span>
+<input class="w-full bg-surface-container-lowest border-0 border-b border-outline-variant focus:border-b-2 focus:border-primary focus:ring-0 pl-10 pr-4 py-3 font-body-md text-body-md transition-colors rounded-t-DEFAULT" placeholder="Search documents..." type="text"/>
+</div>
+<div class="hidden md:flex flex-col gap-2">
+<h2 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-2">Categories</h2>
+<button class="text-left px-4 py-2 rounded-lg bg-surface-container-low text-on-surface hover:bg-surface-container transition-colors font-body-md">All Documents</button>
+<button class="text-left px-4 py-2 rounded-lg hover:bg-surface-container transition-colors text-on-surface-variant font-body-md">Health Insurance</button>
+<button class="text-left px-4 py-2 rounded-lg hover:bg-surface-container transition-colors text-on-surface-variant font-body-md">Retirement (401k)</button>
+<button class="text-left px-4 py-2 rounded-lg hover:bg-surface-container transition-colors text-on-surface-variant font-body-md">Company Policies</button>
+</div>
+</div>
+</aside>
+<!-- Document List Area -->
+<section class="w-full md:w-3/4 flex flex-col gap-stack-sm">
+<!-- Document Group: Recent -->
+<div class="mb-stack-sm">
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-stack-xs border-b border-outline-variant pb-2">Recently Viewed</h3>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-stack-sm mt-stack-xs">
+<!-- Document Card 1 -->
+<div class="group flex items-center justify-between bg-surface-container-lowest p-4 rounded-xl border border-outline-variant hover:border-primary hover:shadow-sm transition-all duration-200">
+<div class="flex items-center gap-3 overflow-hidden">
+<div class="w-10 h-10 rounded-full bg-error-container text-on-error-container flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">picture_as_pdf</span>
+</div>
+<div class="flex flex-col overflow-hidden">
+<span class="font-headline-md text-headline-md text-on-surface truncate">2024_Benefits_Guide.pdf</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Modified: Oct 12, 2023 • 2.4 MB</span>
+</div>
+</div>
+<button class="opacity-0 group-hover:opacity-100 transition-opacity text-primary font-label-md text-label-md px-3 py-1 rounded border border-primary hover:bg-primary-fixed-dim">
+                            Preview
+                        </button>
+<button class="md:hidden text-primary">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+<!-- Document Card 2 -->
+<div class="group flex items-center justify-between bg-surface-container-lowest p-4 rounded-xl border border-outline-variant hover:border-primary hover:shadow-sm transition-all duration-200">
+<div class="flex items-center gap-3 overflow-hidden">
+<div class="w-10 h-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">description</span>
+</div>
+<div class="flex flex-col overflow-hidden">
+<span class="font-headline-md text-headline-md text-on-surface truncate">Employee_Handbook_V3.docx</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Modified: Sep 05, 2023 • 1.1 MB</span>
+</div>
+</div>
+<button class="opacity-0 group-hover:opacity-100 transition-opacity text-primary font-label-md text-label-md px-3 py-1 rounded border border-primary hover:bg-primary-fixed-dim">
+                            Preview
+                        </button>
+<button class="md:hidden text-primary">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Document Group: Policies -->
+<div>
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-stack-xs border-b border-outline-variant pb-2">Policies &amp; Guidelines</h3>
+<div class="flex flex-col gap-stack-xs mt-stack-xs">
+<!-- Document List Item 1 -->
+<div class="group flex items-center justify-between bg-surface-container-lowest p-3 rounded-lg border border-outline-variant hover:bg-surface-container-low transition-colors duration-150">
+<div class="flex items-center gap-3 overflow-hidden">
+<span class="material-symbols-outlined text-outline">description</span>
+<div class="flex flex-col overflow-hidden">
+<span class="font-body-md text-body-md text-on-surface truncate">Remote_Work_Policy_2024.pdf</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Policy • Updated Jan 10, 2024</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="hidden md:flex opacity-0 group-hover:opacity-100 transition-opacity text-on-surface-variant hover:text-primary">
+<span class="material-symbols-outlined">download</span>
+</button>
+<span class="material-symbols-outlined text-outline md:hidden">chevron_right</span>
+</div>
+</div>
+<!-- Document List Item 2 -->
+<div class="group flex items-center justify-between bg-surface-container-lowest p-3 rounded-lg border border-outline-variant hover:bg-surface-container-low transition-colors duration-150">
+<div class="flex items-center gap-3 overflow-hidden">
+<span class="material-symbols-outlined text-outline">description</span>
+<div class="flex flex-col overflow-hidden">
+<span class="font-body-md text-body-md text-on-surface truncate">Travel_Expense_Guidelines.pdf</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Guideline • Updated Dec 01, 2023</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="hidden md:flex opacity-0 group-hover:opacity-100 transition-opacity text-on-surface-variant hover:text-primary">
+<span class="material-symbols-outlined">download</span>
+</button>
+<span class="material-symbols-outlined text-outline md:hidden">chevron_right</span>
+</div>
+</div>
+<!-- Document List Item 3 -->
+<div class="group flex items-center justify-between bg-surface-container-lowest p-3 rounded-lg border border-outline-variant hover:bg-surface-container-low transition-colors duration-150">
+<div class="flex items-center gap-3 overflow-hidden">
+<span class="material-symbols-outlined text-outline">link</span>
+<div class="flex flex-col overflow-hidden">
+<span class="font-body-md text-body-md text-on-surface truncate">Fidelity_401k_Portal_Guide.html</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Reference • Updated Nov 15, 2023</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="hidden md:flex opacity-0 group-hover:opacity-100 transition-opacity text-on-surface-variant hover:text-primary">
+<span class="material-symbols-outlined">open_in_new</span>
+</button>
+<span class="material-symbols-outlined text-outline md:hidden">chevron_right</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden bg-surface-container-lowest font-label-md text-label-md fixed bottom-0 w-full z-50 border-t border-outline-variant flat no shadows flex justify-around items-center h-20 pb-safe w-full px-2">
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-5 py-1 hover:text-primary transition-colors active:scale-95 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="chat_bubble">chat_bubble</span>
+<span>Chat</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-5 py-1 hover:text-primary transition-colors active:scale-95 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span>Benefits</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-full px-5 py-1 active:scale-95 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="description" style="font-variation-settings: 'FILL' 1;">description</span>
+<span>Documents</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-5 py-1 hover:text-primary transition-colors active:scale-95 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span>Profile</span>
+</a>
+</nav>
+</body></html>

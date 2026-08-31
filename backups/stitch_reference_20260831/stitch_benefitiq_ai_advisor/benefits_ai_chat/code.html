@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Benefits AI Chat</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700&amp;family=JetBrains+Mono:wght@400&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "background": "#f9f9f9",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary-fixed": "#e2e2e2",
+                    "inverse-on-surface": "#f1f1f1",
+                    "on-error": "#ffffff",
+                    "outline-variant": "#c3c6d8",
+                    "on-surface-variant": "#424656",
+                    "primary-fixed-dim": "#b4c5ff",
+                    "on-primary-fixed": "#00174c",
+                    "on-tertiary-container": "#f3f3ff",
+                    "primary": "#004ccd",
+                    "on-secondary-container": "#636465",
+                    "inverse-primary": "#b4c5ff",
+                    "surface-bright": "#f9f9f9",
+                    "on-secondary-fixed": "#1a1c1c",
+                    "on-surface": "#1a1c1c",
+                    "surface-tint": "#0052dd",
+                    "on-tertiary-fixed-variant": "#1a3ca8",
+                    "on-error-container": "#93000a",
+                    "primary-fixed": "#dbe1ff",
+                    "tertiary": "#304db9",
+                    "on-secondary": "#ffffff",
+                    "primary-container": "#0f62fe",
+                    "error-container": "#ffdad6",
+                    "surface-dim": "#dadada",
+                    "tertiary-container": "#4b67d3",
+                    "error": "#ba1a1a",
+                    "on-primary-fixed-variant": "#003da9",
+                    "tertiary-fixed": "#dde1ff",
+                    "secondary-fixed-dim": "#c6c6c6",
+                    "surface-container": "#eeeeee",
+                    "surface": "#f9f9f9",
+                    "inverse-surface": "#2f3131",
+                    "tertiary-fixed-dim": "#b8c4ff",
+                    "secondary": "#5d5f5f",
+                    "on-tertiary-fixed": "#001453",
+                    "on-secondary-fixed-variant": "#454747",
+                    "on-tertiary": "#ffffff",
+                    "surface-container-high": "#e8e8e8",
+                    "surface-variant": "#e2e2e2",
+                    "on-primary-container": "#f3f3ff",
+                    "on-primary": "#ffffff",
+                    "surface-container-low": "#f3f3f3",
+                    "on-background": "#1a1c1c",
+                    "outline": "#737687",
+                    "secondary-container": "#e2e2e2",
+                    "surface-container-highest": "#e2e2e2"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "stack-xs": "4px",
+                    "stack-sm": "12px",
+                    "stack-md": "24px",
+                    "margin-desktop": "40px",
+                    "base": "8px",
+                    "stack-lg": "48px",
+                    "gutter": "24px",
+                    "margin-mobile": "16px",
+                    "container-max-width": "1280px"
+            },
+            "fontFamily": {
+                    "display-lg": [
+                            "Hanken Grotesk"
+                    ],
+                    "body-sm": [
+                            "Hanken Grotesk"
+                    ],
+                    "headline-lg": [
+                            "Hanken Grotesk"
+                    ],
+                    "headline-md": [
+                            "Hanken Grotesk"
+                    ],
+                    "label-md": [
+                            "Hanken Grotesk"
+                    ],
+                    "code-sm": [
+                            "JetBrains Mono"
+                    ],
+                    "headline-lg-mobile": [
+                            "Hanken Grotesk"
+                    ],
+                    "body-md": [
+                            "Hanken Grotesk"
+                    ],
+                    "body-lg": [
+                            "Hanken Grotesk"
+                    ]
+            },
+            "fontSize": {
+                    "display-lg": [
+                            "48px",
+                            {
+                                    "lineHeight": "56px",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "body-sm": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "headline-lg": [
+                            "32px",
+                            {
+                                    "lineHeight": "40px",
+                                    "letterSpacing": "-0.01em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "headline-md": [
+                            "20px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "label-md": [
+                            "14px",
+                            {
+                                    "lineHeight": "16px",
+                                    "letterSpacing": "0.05em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "code-sm": [
+                            "13px",
+                            {
+                                    "lineHeight": "18px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "headline-lg-mobile": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "body-md": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "body-lg": [
+                            "18px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "400"
+                            }
+                    ]
+            }
+    },
+        },
+      }
+    </script>
+<style>
+        body {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        .chat-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .chat-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .chat-container::-webkit-scrollbar-thumb {
+            background-color: #e2e2e2;
+            border-radius: 10px;
+        }
+        
+        .ai-glow {
+            box-shadow: 0 0 4px 0 rgba(0, 76, 205, 0.05);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen flex flex-col font-body-md overflow-hidden">
+<!-- TopAppBar -->
+<header class="bg-background dark:bg-background border-b border-outline-variant dark:border-outline w-full sticky top-0 z-50 flex items-center justify-between px-margin-mobile md:px-margin-desktop h-16 w-full">
+<div class="flex items-center gap-3 hover:bg-surface-container dark:hover:bg-surface-container-high transition-colors active:opacity-80 transition-opacity p-2 rounded-lg cursor-pointer">
+<div class="relative w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
+<div class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-background rounded-full"></div>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md text-primary dark:text-primary-fixed-dim">Benefits AI</h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Online</p>
+</div>
+</div>
+<div class="hidden md:flex flex-1 items-center justify-center gap-8 px-8">
+<!-- Desktop Nav cluster hidden as per requirements, using BottomNavBar for mobile/main nav -->
+<nav class="flex gap-6">
+<a class="text-primary dark:text-primary-fixed-dim font-label-md text-label-md flex items-center gap-2 border-b-2 border-primary pb-1" href="#">Chat</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant hover:text-primary dark:hover:text-primary-fixed-dim transition-colors font-label-md text-label-md flex items-center gap-2 pb-1" href="#">Benefits</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant hover:text-primary dark:hover:text-primary-fixed-dim transition-colors font-label-md text-label-md flex items-center gap-2 pb-1" href="#">Documents</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant hover:text-primary dark:hover:text-primary-fixed-dim transition-colors font-label-md text-label-md flex items-center gap-2 pb-1" href="#">Profile</a>
+</nav>
+</div>
+<button class="text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container dark:hover:bg-surface-container-high transition-colors active:opacity-80 transition-opacity p-2 rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 flex flex-col relative w-full max-w-[800px] mx-auto bg-surface-container-lowest">
+<!-- Chat History -->
+<div class="flex-1 overflow-y-auto chat-container p-margin-mobile md:p-gutter flex flex-col gap-stack-md pb-32">
+<!-- AI Welcome Bubble -->
+<div class="flex items-start gap-3 w-full max-w-[85%]">
+<div class="w-8 h-8 rounded-full bg-primary-container flex-shrink-0 flex items-center justify-center text-on-primary-container mt-1">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant ai-glow rounded-xl rounded-tl-sm p-4 text-on-surface font-body-md text-body-md shadow-sm">
+<p>Hello! I'm your Benefits AI assistant. I can help you navigate your corporate benefits, check eligibility, or explain policy details. How can I assist you today?</p>
+</div>
+</div>
+<!-- User Bubble -->
+<div class="flex items-start gap-3 w-full max-w-[85%] self-end flex-row-reverse">
+<div class="w-8 h-8 rounded-full bg-surface-variant flex-shrink-0 flex items-center justify-center text-on-surface mt-1">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">person</span>
+</div>
+<div class="bg-surface-container rounded-xl rounded-tr-sm p-4 text-on-surface font-body-md text-body-md">
+<p>Am I eligible for Tuition Support?</p>
+</div>
+</div>
+<!-- AI Response Bubble -->
+<div class="flex items-start gap-3 w-full max-w-[85%]">
+<div class="w-8 h-8 rounded-full bg-primary-container flex-shrink-0 flex items-center justify-center text-on-primary-container mt-1">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
+</div>
+<div class="bg-surface-container-lowest border border-primary ai-glow rounded-xl rounded-tl-sm p-4 text-on-surface font-body-md text-body-md shadow-sm flex flex-col gap-stack-sm w-full">
+<p>Yes, based on your current profile, you are eligible for the **Tuition Support Program**.</p>
+<div class="bg-surface-container-low p-3 rounded-lg border border-outline-variant flex items-center gap-3">
+<div class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-label-md flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">check_circle</span>
+                            Eligible
+                        </div>
+<div class="text-sm">Up to $5,250 per calendar year.</div>
+</div>
+<p>To qualify for reimbursement, the coursework must be related to your current role or a probable future role within the company, and you must maintain a grade of 'C' or higher.</p>
+<!-- Document Snippet -->
+<div class="mt-2 border border-outline-variant rounded-lg p-3 hover:bg-surface-container transition-colors cursor-pointer group flex items-center justify-between">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">description</span>
+<div>
+<p class="font-label-md text-label-md text-on-surface">Education_Assistance_Policy_2024.pdf</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Last updated: Jan 15, 2024</p>
+</div>
+</div>
+<button class="text-primary font-label-md text-label-md opacity-0 group-hover:opacity-100 transition-opacity">Preview</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Input Area (Fixed Bottom of Canvas) -->
+<div class="absolute bottom-0 left-0 right-0 bg-surface-container-lowest border-t border-outline-variant p-4 flex flex-col gap-3">
+<!-- Quick Actions -->
+<div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
+<button class="flex-shrink-0 flex items-center gap-2 bg-surface border border-outline-variant rounded-full px-4 py-2 hover:bg-primary-fixed hover:border-primary-fixed transition-colors font-label-md text-label-md text-on-surface">
+<span class="material-symbols-outlined text-[18px]">school</span>
+                    Tuition
+                    <span class="material-symbols-outlined text-[16px] text-on-surface-variant">chevron_right</span>
+</button>
+<button class="flex-shrink-0 flex items-center gap-2 bg-surface border border-outline-variant rounded-full px-4 py-2 hover:bg-primary-fixed hover:border-primary-fixed transition-colors font-label-md text-label-md text-on-surface">
+<span class="material-symbols-outlined text-[18px]">favorite</span>
+                    Health
+                    <span class="material-symbols-outlined text-[16px] text-on-surface-variant">chevron_right</span>
+</button>
+<button class="flex-shrink-0 flex items-center gap-2 bg-surface border border-outline-variant rounded-full px-4 py-2 hover:bg-primary-fixed hover:border-primary-fixed transition-colors font-label-md text-label-md text-on-surface">
+<span class="material-symbols-outlined text-[18px]">laptop_mac</span>
+                    Flex Work
+                    <span class="material-symbols-outlined text-[16px] text-on-surface-variant">chevron_right</span>
+</button>
+</div>
+<!-- Input Field -->
+<div class="relative">
+<input class="w-full bg-surface-container border-0 border-b border-outline-variant focus:border-b-2 focus:border-primary focus:ring-0 rounded-t-lg px-4 py-4 pr-12 font-body-md text-body-md text-on-surface placeholder-on-surface-variant transition-colors" placeholder="Ask about your benefits..." type="text"/>
+<button class="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center text-primary hover:bg-surface-container-high rounded-full transition-colors">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">send</span>
+</button>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden bg-surface-container-lowest dark:bg-inverse-surface border-t border-outline-variant dark:border-outline fixed bottom-0 w-full z-50 flex justify-around items-center h-20 pb-safe w-full px-2">
+<button class="flex flex-col items-center justify-center bg-primary-container dark:bg-tertiary-container text-on-primary-container dark:text-on-tertiary-container rounded-full px-5 py-1 active:scale-95 transition-transform duration-150">
+<span class="material-symbols-outlined">chat_bubble</span>
+<span class="font-label-md text-label-md mt-1">Chat</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant px-5 py-1 hover:text-primary dark:hover:text-primary-fixed-dim transition-colors active:scale-95 transition-transform duration-150">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+<span class="font-label-md text-label-md mt-1">Benefits</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant px-5 py-1 hover:text-primary dark:hover:text-primary-fixed-dim transition-colors active:scale-95 transition-transform duration-150">
+<span class="material-symbols-outlined">description</span>
+<span class="font-label-md text-label-md mt-1">Documents</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant px-5 py-1 hover:text-primary dark:hover:text-primary-fixed-dim transition-colors active:scale-95 transition-transform duration-150">
+<span class="material-symbols-outlined">person</span>
+<span class="font-label-md text-label-md mt-1">Profile</span>
+</button>
+</nav>
+<!-- Adjust body padding for mobile nav -->
+<style>
+        @media (max-width: 767px) {
+            body {
+                padding-bottom: 5rem; /* space for bottom nav */
+            }
+            .chat-container {
+                padding-bottom: 120px; /* space for input area + bottom nav */
+            }
+        }
+    </style>
+</body></html>

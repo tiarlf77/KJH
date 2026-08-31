@@ -1,0 +1,10 @@
+# API 키와 비밀값
+.env
+
+# Python 생성 파일
+__pycache__/
+*.py[cod]
+
+# 로컬 실행 로그
+server.log
+
