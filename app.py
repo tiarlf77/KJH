@@ -373,12 +373,13 @@ class Handler(SimpleHTTPRequestHandler):
                 raise ValueError("질문을 입력해 주세요.")
             evidence = retrieve(question)
             history = [] if starts_new_policy_topic(question) else body.get("history", [])
-            answer = (
-                build_sibling_marriage_answer(question)
-                or build_seungjungsang_answer(question)
-                or build_hoegap_answer(question, history)
-                or call_openai(question, evidence, history)
-            )
+            marriage_answer = build_sibling_marriage_answer(question)
+            seungjungsang_answer = build_seungjungsang_answer(question)
+            hoegap_answer = build_hoegap_answer(question, history)
+            answer = marriage_answer or seungjungsang_answer or hoegap_answer or call_openai(question, evidence, history)
+            # 결정론적으로 처리한 경조금 답변은 경조금 기준만 근거로 표시합니다.
+            if marriage_answer or seungjungsang_answer or hoegap_answer:
+                evidence = [{"file": "경조금 지급기준.txt", "score": 1, "text": "경조금 지급기준"}]
             self.respond(200, {"answer": answer, "evidence": evidence})
         except (ValueError, RuntimeError, HTTPError, URLError) as error:
             self.respond(400, {"error": str(error)})
