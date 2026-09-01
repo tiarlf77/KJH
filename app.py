@@ -306,7 +306,11 @@ def build_death_answer(question):
                 f"네. {relation} 사망 시 경조 지원 물품을 신청할 수 있습니다."
                 if asks_items else "경조금 지급 대상입니다."
             )
-            item_line = "- 지원 물품: 화환·조화·장례용품\n" if asks_items else ""
+            item_line = ""
+            if asks_items:
+                # 규정 표에서 조부모·형제자매는 화환만 지급하고 장례용품은 지급하지 않습니다.
+                goods = "화환" if relation in ("본인 및 배우자 조부모", "본인 및 배우자 형제·자매") else "화환·장례용품"
+                item_line = f"- 지원 물품: {goods}\n"
             return (
                 f"{opening}\n\n"
                 "확인 결과\n"
