@@ -102,12 +102,19 @@ def birthday_context(question):
         sixtieth = date(birth.year + 60, birth.month, birth.day)
     except ValueError:
         return ""
+    deadline = add_months(sixtieth, 3)
     if sixtieth > today:
-        status = f"회갑일은 {sixtieth.isoformat()}이며 현재 기준일 이후이다. 아직 회갑일이 지나지 않았다."
-    elif sixtieth == today:
-        status = "오늘이 회갑일이다."
+        status = f"회갑 사유 발생일은 {sixtieth.isoformat()}이며 현재 기준일 이후이다. 아직 신청할 수 없다."
+    elif today <= deadline:
+        status = (
+            f"회갑 사유 발생일은 {sixtieth.isoformat()}이고 신청 마감일은 {deadline.isoformat()}이다. "
+            "현재 기준일은 사유 발생일로부터 3개월 이내이므로 경조금 신청이 가능하다."
+        )
     else:
-        status = f"회갑일은 {sixtieth.isoformat()}이며 현재 기준일 이전이다. 2026년 회갑 대상이 아니다."
+        status = (
+            f"회갑 사유 발생일은 {sixtieth.isoformat()}이고 신청 마감일은 {deadline.isoformat()}이다. "
+            "현재 기준일은 신청 마감일 이후이므로 청구권이 소멸되어 신청할 수 없다."
+        )
     return (
         f"\n[회갑 생년월일 계산 결과]\n생년월일: {birth.isoformat()} / 기준일: {today.isoformat()} / {status} "
         "이 계산 결과를 답변에 반영하고, 대상 관계와 회갑 연령을 구분해 설명한다."
@@ -152,8 +159,9 @@ def call_openai(question, evidence, history=None):
         "그 다음 현재 기준일을 알려주고 생년월일을 YYYYMMDD 형식으로 요청한다. 지급액 20만원과 신청기한은 회갑 대상 판정 이후에 안내한다. "
         "단, 사용자가 '우리 엄마', '우리 아버지', '우리 부모님'이라고 표현하면 별도 배우자 표현이 없는 한 본인 부모로 이해하고 관계를 다시 묻지 않는다. "
         "직전 대화에서 생년월일과 관계가 이미 확인되었으면 같은 질문을 반복하지 말고 회갑일 계산 결과를 안내한다. "
-        "계산 결과가 '2026년 회갑 대상이 아니다'이면 '확정하기 어렵다', '추가 확인 필요' 같은 유보 표현을 쓰지 않는다. "
-        "이 경우에는 회갑일과 2026년 지원 대상이 아님을 2~3문장으로 간단히 안내한다."
+        "회갑일이 지났더라도 사유 발생일로부터 3개월 이내이면 신청 가능하다. "
+        "계산 결과가 신청 마감일 이후이면 '확정하기 어렵다', '추가 확인 필요' 같은 유보 표현을 쓰지 않는다. "
+        "이 경우에는 회갑일·신청 마감일·청구권 소멸을 2~3문장으로 간단히 안내한다."
     )
     conversation = []
     for item in (history or [])[-8:]:
