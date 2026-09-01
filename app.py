@@ -336,6 +336,24 @@ def starts_new_policy_topic(question):
     return any(word in question for word in topic_words) and "회갑" not in question
 
 
+def build_clarification_answer(question):
+    """제도 유형을 알 수 없는 질문에 전체 상담 범위와 재질문 형식을 안내합니다."""
+    topics = ("출장", "파견", "부임", "경조", "결혼", "회갑", "출산", "사망", "숙소", "동호회")
+    if any(word in question for word in topics):
+        return ""
+    return (
+        "질문의 대상이나 제도 유형을 정확히 확인하기 어렵습니다.\n\n"
+        "현재 상담 가능한 복리후생 항목은 다음과 같습니다.\n"
+        "- 국내·외 출장 및 파견·부임\n"
+        "- 경조금: 결혼, 회갑, 출산장려금, 사망\n"
+        "- 숙소지원금\n"
+        "- 동호회 지원\n\n"
+        "정확한 안내를 위해 제도 유형, 대상 또는 상황, 확인하고 싶은 내용을 포함해 다시 질문해 주세요.\n"
+        "예: 지원금, 지원 물품, 자격, 신청기한, 필요 서류, 신청 방법\n\n"
+        "예시: ‘서울에서 포항으로 출장 갈 때 교통비가 지원되나요?’ 또는 ‘타지역으로 부임하면 숙소지원금을 받을 수 있나요?’"
+    )
+
+
 def call_openai(question, evidence, history=None):
     """검색 근거를 포함해 Responses API를 호출합니다."""
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
@@ -423,10 +441,13 @@ class Handler(SimpleHTTPRequestHandler):
             seungjungsang_answer = build_seungjungsang_answer(question)
             hoegap_answer = build_hoegap_answer(question, history)
             death_answer = build_death_answer(question)
-            answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or call_openai(question, evidence, history)
+            clarification_answer = build_clarification_answer(question)
+            answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or clarification_answer or call_openai(question, evidence, history)
             # 결정론적으로 처리한 경조금 답변은 경조금 기준만 근거로 표시합니다.
             if marriage_answer or seungjungsang_answer or hoegap_answer or death_answer:
                 evidence = [{"file": "경조금 지급기준.txt", "score": 1, "text": "경조금 지급기준"}]
+            elif clarification_answer:
+                evidence = []
             self.respond(200, {"answer": answer, "evidence": evidence})
         except (ValueError, RuntimeError, HTTPError, URLError) as error:
             self.respond(400, {"error": str(error)})
