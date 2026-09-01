@@ -108,7 +108,8 @@ def call_openai(question, evidence):
     )
     payload = {
         "model": MODEL,
-        "reasoning": {"effort": "low"},
+        # 규정 검색 결과를 요약하는 상담은 낮은 지연을 우선합니다.
+        "reasoning": {"effort": "none"},
         "instructions": instructions,
         "input": f"사용자 질문:\n{question}{date_deadline_context(question)}\n\n검색된 규정 근거:\n{evidence_text}",
     }
@@ -118,7 +119,7 @@ def call_openai(question, evidence):
         headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
         method="POST",
     )
-    with urlopen(request, timeout=60) as response:
+    with urlopen(request, timeout=45) as response:
         data = json.loads(response.read().decode("utf-8"))
     if data.get("output_text"):
         return data["output_text"]
