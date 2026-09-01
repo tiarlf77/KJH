@@ -72,6 +72,23 @@ def add_months(value, months):
     return date(year, month, day)
 
 
+def extract_birth_date(text):
+    """숫자형·하이픈형·한글형 생년월일을 날짜로 변환합니다."""
+    patterns = (
+        r"(?<!\d)(19\d{2})(\d{2})(\d{2})(?!\d)",
+        r"(?<!\d)(19\d{2})[-./](\d{1,2})[-./](\d{1,2})(?!\d)",
+        r"(?<!\d)(19\d{2})년\s*(\d{1,2})월\s*(\d{1,2})일",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            try:
+                return date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+            except ValueError:
+                return None
+    return None
+
+
 def date_deadline_context(question):
     """질문에 사유 발생일이 있으면 경조금 3개월 마감일을 계산합니다."""
     match = re.search(r"(20\d{2})[.\-/년](\d{1,2})[.\-/월](\d{1,2})일?", question)
@@ -93,11 +110,10 @@ def birthday_context(question):
     """회갑 질문의 생년월일을 계산해 모델이 연령을 추측하지 않게 합니다."""
     if "회갑" not in question:
         return ""
-    match = re.search(r"(?<!\d)(19\d{2})(\d{2})(\d{2})(?!\d)", question)
-    if not match:
+    birth = extract_birth_date(question)
+    if not birth:
         return ""
     try:
-        birth = date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
         today = date.today()
         sixtieth = date(birth.year + 60, birth.month, birth.day)
     except ValueError:
@@ -129,10 +145,10 @@ def conversation_context(question, history):
         relation = "우리 엄마·아버지·부모님은 별도 배우자 표현이 없으므로 본인 부모로 해석한다."
     elif any(word in question for word in ("배우자 어머니", "배우자 엄마", "배우자 아버지", "장모님", "장인어른", "시어머니", "시아버지")):
         relation = "질문 대상은 배우자의 부모로 해석한다."
-    dates = re.findall(r"(?<!\d)(19\d{2}\d{4})(?!\d)", question + " " + prior_text)
+    birth = extract_birth_date(question + " " + prior_text)
     birthday = ""
-    if dates and ("회갑" in question or "회갑" in prior_text):
-        birthday = birthday_context("회갑 " + dates[-1])
+    if birth and ("회갑" in question or "회갑" in prior_text):
+        birthday = birthday_context(f"회갑 {birth.strftime('%Y%m%d')}")
     if not relation and not birthday:
         return ""
     return f"\n[대화 맥락 보완]\n{relation}\n{birthday}".strip()
