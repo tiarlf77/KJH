@@ -284,6 +284,35 @@ def build_seungjungsang_answer(question):
     )
 
 
+def build_death_answer(question):
+    """사망 경조금 문의를 관계별로 판정해 불필요한 반복 없이 안내합니다."""
+    if not any(word in question for word in ("돌아가", "사망", "별세", "상") ):
+        return ""
+    relation_amount = (
+        (("시아버지", "시어머니", "장인어른", "장모님", "배우자 부모"), "배우자 부모", "1,000,000원"),
+        (("아버지", "어머니", "엄마", "아빠", "본인 부모"), "본인 부모", "1,000,000원"),
+        (("자녀", "아들", "딸"), "자녀", "1,000,000원"),
+        (("조부모", "할아버지", "할머니", "외할아버지", "외할머니"), "본인 및 배우자 조부모", "300,000원"),
+        (("형제", "자매", "오빠", "언니", "누나", "형", "동생", "처남", "처제", "처형", "시누이", "시동생"), "본인 및 배우자 형제·자매", "300,000원"),
+        (("배우자", "아내", "남편", "와이프"), "배우자", "2,000,000원"),
+        (("본인",), "본인", "5,000,000원"),
+    )
+    for words, relation, amount in relation_amount:
+        if any(word in question for word in words):
+            return (
+                "경조금 지급 대상입니다.\n\n"
+                "확인 결과\n"
+                f"- 관계: {relation}\n"
+                "- 판정: 지원 대상\n"
+                f"- 지원금: {amount}\n"
+                "- 필요 서류: 기본증명서(상세, 사망일 표기 확인), 가족관계증명서, 부고장\n\n"
+                "○ 회사 경조 담당 업체(경조물품,화환 등)\n"
+                "- 현진시닝 : 1600-0113(24시간)\n\n"
+                "최종 승인·지급은 담당 부서의 서류 검토를 거쳐 결정됩니다."
+            )
+    return ""
+
+
 def starts_new_policy_topic(question):
     """이전 대화와 분리해야 하는 새 복리후생 질문인지 판단합니다."""
     topic_words = ("결혼", "사망", "출산", "동호회", "숙소", "출장", "여비", "부임", "건강검진")
@@ -376,9 +405,10 @@ class Handler(SimpleHTTPRequestHandler):
             marriage_answer = build_sibling_marriage_answer(question)
             seungjungsang_answer = build_seungjungsang_answer(question)
             hoegap_answer = build_hoegap_answer(question, history)
-            answer = marriage_answer or seungjungsang_answer or hoegap_answer or call_openai(question, evidence, history)
+            death_answer = build_death_answer(question)
+            answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or call_openai(question, evidence, history)
             # 결정론적으로 처리한 경조금 답변은 경조금 기준만 근거로 표시합니다.
-            if marriage_answer or seungjungsang_answer or hoegap_answer:
+            if marriage_answer or seungjungsang_answer or hoegap_answer or death_answer:
                 evidence = [{"file": "경조금 지급기준.txt", "score": 1, "text": "경조금 지급기준"}]
             self.respond(200, {"answer": answer, "evidence": evidence})
         except (ValueError, RuntimeError, HTTPError, URLError) as error:
