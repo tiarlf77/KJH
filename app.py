@@ -267,6 +267,23 @@ def build_sibling_marriage_answer(question):
     )
 
 
+def build_seungjungsang_answer(question):
+    """승중상 문의는 규정에 명시된 금액과 서류를 고정해 안내합니다."""
+    if "승중상" not in question:
+        return ""
+    return (
+        "경조금 지급 대상입니다.\n\n"
+        "확인 결과\n"
+        "- 관계: 승중상\n"
+        "- 판정: 지원 대상\n"
+        "- 지원금: 500,000원\n"
+        "- 필요 서류: 기본증명서(상세, 사망일 표기 확인), 가족관계증명서, 부고장\n\n"
+        "○ 회사 경조 담당 업체(경조물품,화환 등)\n"
+        "- 현진시닝 : 1600-0113(24시간)\n\n"
+        "최종 승인·지급은 담당 부서의 서류 검토를 거쳐 결정됩니다."
+    )
+
+
 def starts_new_policy_topic(question):
     """이전 대화와 분리해야 하는 새 복리후생 질문인지 판단합니다."""
     topic_words = ("결혼", "사망", "출산", "동호회", "숙소", "출장", "여비", "부임", "건강검진")
@@ -358,6 +375,7 @@ class Handler(SimpleHTTPRequestHandler):
             history = [] if starts_new_policy_topic(question) else body.get("history", [])
             answer = (
                 build_sibling_marriage_answer(question)
+                or build_seungjungsang_answer(question)
                 or build_hoegap_answer(question, history)
                 or call_openai(question, evidence, history)
             )
