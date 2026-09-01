@@ -176,12 +176,15 @@ def build_hoegap_answer(question, history):
     deadline = add_months(sixtieth, 3)
     if today < sixtieth:
         verdict = "회갑 사유 발생일 전"
+        support_line = ""
         summary = f"회갑 사유 발생일인 {sixtieth.isoformat()}부터 신청 여부를 확인할 수 있습니다."
     elif today <= deadline:
         verdict = "신청 가능"
-        summary = "현재 사유 발생일로부터 3개월 이내이므로 경조금 신청이 가능합니다. 지급액은 20만 원입니다."
+        support_line = "- 지원금: 200,000원\n"
+        summary = "현재 사유 발생일로부터 3개월 이내이므로 경조금 신청이 가능합니다."
     else:
         verdict = "신청 불가"
+        support_line = ""
         summary = "신청 마감일이 지나 청구권이 소멸되어 경조금 신청이 불가능합니다."
     return (
         "확인 결과\n"
@@ -190,7 +193,8 @@ def build_hoegap_answer(question, history):
         f"- 회갑 사유 발생일: {sixtieth.isoformat()}\n"
         f"- 신청 마감일: {deadline.isoformat()}\n"
         f"- 현재 기준일: {today.isoformat()}\n"
-        f"- 판정: {verdict}\n\n"
+        f"- 판정: {verdict}\n"
+        f"{support_line}\n"
         f"{summary}\n최종 승인·지급은 담당 부서의 서류 검토를 거쳐 결정됩니다."
     )
 
