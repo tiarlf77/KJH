@@ -29,7 +29,16 @@ QUERY_SYNONYMS = {
     "장모님": {"배우자", "부모"},
     "시어머니": {"배우자", "부모"},
     "시아버지": {"배우자", "부모"},
+    "처제": {"배우자", "형제", "자매"},
+    "처형": {"배우자", "형제", "자매"},
+    "처남": {"배우자", "형제", "자매"},
+    "시누이": {"배우자", "형제", "자매"},
+    "시동생": {"배우자", "형제", "자매"},
+    "아주버님": {"배우자", "형제", "자매"},
+    "도련님": {"배우자", "형제", "자매"},
 }
+OWN_SIBLINGS = ("형", "누나", "언니", "오빠", "남동생", "여동생", "동생", "형제", "자매")
+SPOUSE_SIBLINGS = ("처제", "처형", "처남", "시누이", "시동생", "아주버님", "도련님")
 
 
 def load_env():
@@ -229,10 +238,10 @@ def build_hoegap_answer(question, history):
 
 def build_sibling_marriage_answer(question):
     """형제자매 결혼 문의는 규정 기준으로 일관되게 안내합니다."""
-    sibling_words = ("형", "누나", "언니", "오빠", "동생", "형제", "자매")
+    sibling_words = OWN_SIBLINGS + SPOUSE_SIBLINGS
     if "결혼" not in question or not any(word in question for word in sibling_words):
         return ""
-    is_spouse_side = "배우자" in question or "처남" in question or "처제" in question or "시누이" in question
+    is_spouse_side = "배우자" in question or any(word in question for word in SPOUSE_SIBLINGS)
     if is_spouse_side:
         relation = "배우자 형제·자매"
         documents = "본인 가족관계증명서, 배우자 부모 기준 가족관계증명서, 청첩장"
