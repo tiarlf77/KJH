@@ -309,9 +309,10 @@ def build_death_answer(question):
             )
             item_line = ""
             if asks_items:
-                # 규정 표에서 조부모·형제자매는 화환만 지급하고 장례용품은 지급하지 않습니다.
-                goods = "화환" if relation in ("본인 외조부모", "본인 및 배우자 조부모", "본인 및 배우자 형제·자매") else "화환·장례용품"
-                item_line = f"- 지원 물품: {goods}\n"
+                # 규정 표의 지급 여부를 O/X로 표시해 지원 가능 여부를 오해하지 않게 합니다.
+                wreath = "X" if relation == "본인 및 배우자 형제·자매" else "O"
+                supplies = "O" if relation in ("본인", "배우자", "본인 부모", "배우자 부모", "자녀") else "X"
+                item_line = f"- 화환: {wreath}\n- 장례용품: {supplies}\n"
             documents = "기본증명서(상세, 사망일 표기 확인), 가족관계증명서, 부고장"
             if relation == "본인 외조부모":
                 documents = "기본증명서(상세, 사망일 표기 확인), 어머니 기준 가족관계증명서, 부고장"
