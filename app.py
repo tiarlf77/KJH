@@ -166,10 +166,17 @@ def identify_parent_relation(text):
 def build_hoegap_answer(question, history):
     """관계와 생년월일이 확인된 회갑 문의에는 일관된 검토 양식을 반환합니다."""
     prior_text = " ".join(item.get("content", "") for item in (history or [])[-6:])
-    combined = f"{question} {prior_text}"
-    relation = identify_parent_relation(combined)
-    birth = extract_birth_date(combined)
-    if not relation or not birth or "회갑" not in combined:
+    # 새 질문에 값이 있으면 반드시 이전 대화보다 우선합니다.
+    current_relation = identify_parent_relation(question)
+    current_birth = extract_birth_date(question)
+    relation = current_relation or identify_parent_relation(prior_text)
+    birth = current_birth or extract_birth_date(prior_text)
+    is_hoegap = (
+        "회갑" in question
+        or ("경조금" in question and current_relation and current_birth)
+        or "회갑" in prior_text
+    )
+    if not relation or not birth or not is_hoegap:
         return ""
     today = date.today()
     sixtieth = date(birth.year + 60, birth.month, birth.day)
