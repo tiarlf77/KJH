@@ -89,6 +89,31 @@ def date_deadline_context(question):
     )
 
 
+def birthday_context(question):
+    """회갑 질문의 생년월일을 계산해 모델이 연령을 추측하지 않게 합니다."""
+    if "회갑" not in question:
+        return ""
+    match = re.search(r"(?<!\d)(19\d{2})(\d{2})(\d{2})(?!\d)", question)
+    if not match:
+        return ""
+    try:
+        birth = date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+        today = date.today()
+        sixtieth = date(birth.year + 60, birth.month, birth.day)
+    except ValueError:
+        return ""
+    if sixtieth > today:
+        status = f"회갑일은 {sixtieth.isoformat()}이며 현재 기준일 이후이다. 아직 회갑일이 지나지 않았다."
+    elif sixtieth == today:
+        status = "오늘이 회갑일이다."
+    else:
+        status = f"회갑일은 {sixtieth.isoformat()}이며 현재 기준일 이전이다. 2026년 회갑 대상이 아니다."
+    return (
+        f"\n[회갑 생년월일 계산 결과]\n생년월일: {birth.isoformat()} / 기준일: {today.isoformat()} / {status} "
+        "이 계산 결과를 답변에 반영하고, 대상 관계와 회갑 연령을 구분해 설명한다."
+    )
+
+
 def call_openai(question, evidence):
     """검색 근거를 포함해 Responses API를 호출합니다."""
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
@@ -113,7 +138,7 @@ def call_openai(question, evidence):
         # 규정 검색 결과를 요약하는 상담은 낮은 지연을 우선합니다.
         "reasoning": {"effort": "none"},
         "instructions": instructions,
-        "input": f"사용자 질문:\n{question}{date_deadline_context(question)}\n\n검색된 규정 근거:\n{evidence_text}",
+        "input": f"사용자 질문:\n{question}{date_deadline_context(question)}{birthday_context(question)}\n\n검색된 규정 근거:\n{evidence_text}",
     }
     request = Request(
         "https://api.openai.com/v1/responses",
