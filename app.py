@@ -114,6 +114,23 @@ def birthday_context(question):
     )
 
 
+def conversation_context(question, history):
+    """후속 답변의 관계와 생년월일을 직전 대화에서 보완합니다."""
+    prior_text = " ".join(item.get("content", "") for item in (history or [])[-6:])
+    relation = ""
+    if any(word in question for word in ("우리 엄마", "우리 어머니", "우리 아버지", "우리 부모님", "우리 부모")):
+        relation = "우리 엄마·아버지·부모님은 별도 배우자 표현이 없으므로 본인 부모로 해석한다."
+    elif any(word in question for word in ("배우자 어머니", "배우자 엄마", "배우자 아버지", "장모님", "장인어른", "시어머니", "시아버지")):
+        relation = "질문 대상은 배우자의 부모로 해석한다."
+    dates = re.findall(r"(?<!\d)(19\d{2}\d{4})(?!\d)", question + " " + prior_text)
+    birthday = ""
+    if dates and ("회갑" in question or "회갑" in prior_text):
+        birthday = birthday_context("회갑 " + dates[-1])
+    if not relation and not birthday:
+        return ""
+    return f"\n[대화 맥락 보완]\n{relation}\n{birthday}".strip()
+
+
 def call_openai(question, evidence, history=None):
     """검색 근거를 포함해 Responses API를 호출합니다."""
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
@@ -132,7 +149,9 @@ def call_openai(question, evidence, history=None):
         "계산된 신청 마감일이 제공되면 그 날짜를 사용한다. 규정의 회갑 대상은 본인 및 배우자 부모이고 지급액은 20만원이다."
         " 부모·배우자 부모의 회갑 질문에서 생년월일이 없으면 연령을 추측하거나 지원을 확정하지 않는다. "
         "답변은 다음 흐름으로 작성한다: '해당 부모가 본인 부모인지 배우자 부모인지 관계 요건은 확인되지만, 현재 정보만으로 실제 회갑 대상인지 판단할 수 없다'고 먼저 설명한다. "
-        "그 다음 현재 기준일을 알려주고 생년월일을 YYYYMMDD 형식으로 요청한다. 지급액 20만원과 신청기한은 회갑 대상 판정 이후에 안내한다."
+        "그 다음 현재 기준일을 알려주고 생년월일을 YYYYMMDD 형식으로 요청한다. 지급액 20만원과 신청기한은 회갑 대상 판정 이후에 안내한다. "
+        "단, 사용자가 '우리 엄마', '우리 아버지', '우리 부모님'이라고 표현하면 별도 배우자 표현이 없는 한 본인 부모로 이해하고 관계를 다시 묻지 않는다. "
+        "직전 대화에서 생년월일과 관계가 이미 확인되었으면 같은 질문을 반복하지 말고 회갑일 계산 결과를 안내한다."
     )
     conversation = []
     for item in (history or [])[-8:]:
@@ -140,7 +159,7 @@ def call_openai(question, evidence, history=None):
             conversation.append({"role": item["role"], "content": item["content"]})
     prior_text = " ".join(item.get("content", "") for item in (history or [])[-4:])
     birthday_question = question if "회갑" in question else (f"회갑 {question}" if "회갑" in prior_text else question)
-    conversation.append({"role": "user", "content": f"{question}{date_deadline_context(question)}{birthday_context(birthday_question)}\n\n검색된 규정 근거:\n{evidence_text}"})
+    conversation.append({"role": "user", "content": f"{question}{date_deadline_context(question)}{birthday_context(birthday_question)}{conversation_context(question, history)}\n\n검색된 규정 근거:\n{evidence_text}"})
     payload = {
         "model": MODEL,
         # 규정 검색 결과를 요약하는 상담은 낮은 지연을 우선합니다.
