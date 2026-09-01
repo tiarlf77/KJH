@@ -36,9 +36,14 @@ QUERY_SYNONYMS = {
     "시동생": {"배우자", "형제", "자매"},
     "아주버님": {"배우자", "형제", "자매"},
     "도련님": {"배우자", "형제", "자매"},
+    "와이프": {"배우자"},
+    "아내": {"배우자"},
+    "남편": {"배우자"},
+    "부인": {"배우자"},
 }
 OWN_SIBLINGS = ("형", "누나", "언니", "오빠", "남동생", "여동생", "동생", "형제", "자매")
 SPOUSE_SIBLINGS = ("처제", "처형", "처남", "시누이", "시동생", "아주버님", "도련님")
+SPOUSE_CUES = ("배우자", "와이프", "아내", "남편", "부인", "wife", "husband")
 
 
 def load_env():
@@ -241,7 +246,10 @@ def build_sibling_marriage_answer(question):
     sibling_words = OWN_SIBLINGS + SPOUSE_SIBLINGS
     if "결혼" not in question or not any(word in question for word in sibling_words):
         return ""
-    is_spouse_side = "배우자" in question or any(word in question for word in SPOUSE_SIBLINGS)
+    is_spouse_side = (
+        any(word in question for word in SPOUSE_SIBLINGS)
+        or (any(word in question.lower() for word in SPOUSE_CUES) and any(word in question for word in OWN_SIBLINGS))
+    )
     if is_spouse_side:
         relation = "배우자 형제·자매"
         documents = "본인 가족관계증명서, 배우자 부모 기준 가족관계증명서, 청첩장"
