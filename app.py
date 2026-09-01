@@ -19,6 +19,17 @@ SOURCE_FILES = {
     "숙소지원금 운영 기준.txt",
     "여비관리기준.txt",
 }
+QUERY_SYNONYMS = {
+    "동생": {"형제", "자매", "형제자매"},
+    "형": {"형제", "형제자매"},
+    "누나": {"형제", "자매", "형제자매"},
+    "언니": {"형제", "자매", "형제자매"},
+    "오빠": {"형제", "형제자매"},
+    "장인어른": {"배우자", "부모"},
+    "장모님": {"배우자", "부모"},
+    "시어머니": {"배우자", "부모"},
+    "시아버지": {"배우자", "부모"},
+}
 
 
 def load_env():
@@ -42,6 +53,9 @@ def tokens(text):
 def retrieve(question, limit=12):
     """네 개 원문 규정에서 질문과 관련된 문단을 찾아 근거로 반환합니다."""
     query_tokens = tokens(question)
+    for word, synonyms in QUERY_SYNONYMS.items():
+        if word in question:
+            query_tokens.update(synonyms)
     results = []
     for path in sorted(RULES_DIR.glob("*.txt")):
         # 공식 기준 4개 파일만 상담 근거로 사용하고 샘플 문서는 제외합니다.
@@ -171,10 +185,11 @@ def build_hoegap_answer(question, history):
     current_birth = extract_birth_date(question)
     relation = current_relation or identify_parent_relation(prior_text)
     birth = current_birth or extract_birth_date(prior_text)
+    # 이전 회갑 대화는 생년월일·부모 관계처럼 명확한 후속 입력일 때만 이어받습니다.
     is_hoegap = (
         "회갑" in question
         or ("경조금" in question and current_relation and current_birth)
-        or "회갑" in prior_text
+        or ("회갑" in prior_text and (current_relation or current_birth))
     )
     if not relation or not birth or not is_hoegap:
         return ""
@@ -227,6 +242,7 @@ def call_openai(question, evidence, history=None):
         "그 다음 현재 기준일을 알려주고 생년월일을 YYYYMMDD 형식으로 요청한다. 지급액 20만원과 신청기한은 회갑 대상 판정 이후에 안내한다. "
         "단, 사용자가 '우리 엄마', '우리 아버지', '우리 부모님'이라고 표현하면 별도 배우자 표현이 없는 한 본인 부모로 이해하고 관계를 다시 묻지 않는다. "
         "직전 대화에서 생년월일과 관계가 이미 확인되었으면 같은 질문을 반복하지 말고 회갑일 계산 결과를 안내한다. "
+        "사용자가 결혼·사망·출산·동호회·숙소·출장 등 다른 제도를 새로 질문하면 이전 회갑 대화와 분리해 현재 질문의 의도와 규정만 사용한다. "
         "회갑일이 지났더라도 사유 발생일로부터 3개월 이내이면 신청 가능하다. "
         "계산 결과가 신청 마감일 이후이면 '확정하기 어렵다', '추가 확인 필요' 같은 유보 표현을 쓰지 않는다. "
         "이 경우에는 회갑일·신청 마감일·청구권 소멸을 2~3문장으로 간단히 안내한다."
