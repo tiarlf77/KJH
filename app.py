@@ -12,7 +12,7 @@ from urllib.parse import unquote
 
 BASE_DIR = Path(__file__).resolve().parent
 RULES_DIR = BASE_DIR / "규정"
-MODEL = "gpt-5.6-luna"
+MODEL = "gpt-5.6-terra"
 SOURCE_FILES = {
     "경조금 지급기준.txt",
     "동호회 관리 규정.txt",
