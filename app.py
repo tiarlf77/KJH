@@ -114,7 +114,7 @@ def birthday_context(question):
     )
 
 
-def call_openai(question, evidence):
+def call_openai(question, evidence, history=None):
     """검색 근거를 포함해 Responses API를 호출합니다."""
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
     if not api_key:
@@ -133,12 +133,19 @@ def call_openai(question, evidence):
         " 부모·배우자 부모의 회갑 질문에서 생년월일이 없으면 연령을 추측하거나 대상 여부를 단정하지 않는다. "
         "먼저 해당 부모가 대상 관계에 포함된다고 설명하고, 현재 기준일을 알려준 뒤 생년월일을 YYYYMMDD 형식으로 입력해 달라고 자연스럽게 되묻는다."
     )
+    conversation = []
+    for item in (history or [])[-8:]:
+        if item.get("role") in ("user", "assistant") and item.get("content"):
+            conversation.append({"role": item["role"], "content": item["content"]})
+    prior_text = " ".join(item.get("content", "") for item in (history or [])[-4:])
+    birthday_question = question if "회갑" in question else (f"회갑 {question}" if "회갑" in prior_text else question)
+    conversation.append({"role": "user", "content": f"{question}{date_deadline_context(question)}{birthday_context(birthday_question)}\n\n검색된 규정 근거:\n{evidence_text}"})
     payload = {
         "model": MODEL,
         # 규정 검색 결과를 요약하는 상담은 낮은 지연을 우선합니다.
         "reasoning": {"effort": "none"},
         "instructions": instructions,
-        "input": f"사용자 질문:\n{question}{date_deadline_context(question)}{birthday_context(question)}\n\n검색된 규정 근거:\n{evidence_text}",
+        "input": conversation,
     }
     request = Request(
         "https://api.openai.com/v1/responses",
@@ -172,7 +179,7 @@ class Handler(SimpleHTTPRequestHandler):
             if not question:
                 raise ValueError("질문을 입력해 주세요.")
             evidence = retrieve(question)
-            answer = call_openai(question, evidence)
+            answer = call_openai(question, evidence, body.get("history", []))
             self.respond(200, {"answer": answer, "evidence": evidence})
         except (ValueError, RuntimeError, HTTPError, URLError) as error:
             self.respond(400, {"error": str(error)})

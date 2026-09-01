@@ -39,13 +39,14 @@
     ];
 
     const form=document.querySelector('#form'), input=document.querySelector('#question'), chat=document.querySelector('#chat'), send=document.querySelector('#send');
+    const conversation=[];
     const examples=['아버지가 1966년생인데 회갑 경조금 대상인가요?','2026년 8월 31일에 발생한 경조금은 언제까지 신청해야 하나요?','서울에서 포항으로 교육을 가는데 토요일 기차비가 지원되나요?','동호회 활동보조금은 어떤 조건에서 받을 수 있나요?','숙소지원금은 발령 후 언제까지 신청해야 하나요?','해외출장 숙박비와 소액경비 기준을 알려줘'];
     // 방문할 때마다 규정 범위 안의 질문 예시를 무작위로 보여줍니다.
     input.placeholder='예: '+examples[Math.floor(Math.random()*examples.length)];
     input.addEventListener('input',()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,130)+'px';send.disabled=!input.value.trim()});
     // 엔터는 전송하고, 여러 줄 질문이 필요할 때는 Shift+Enter를 사용합니다.
     input.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();if(input.value.trim()&&!send.disabled)form.requestSubmit()}});
-    form.addEventListener('submit',async e=>{e.preventDefault();const q=input.value.trim();if(!q)return;addUser(q);input.value='';input.style.height='auto';send.disabled=true;addTyping();const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),50000);try{const response=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q}),signal:controller.signal});const data=await response.json();removeTyping();if(!response.ok)throw new Error(data.error||'상담 처리 중 오류가 발생했습니다.');addAnswer(data.answer,data.evidence)}catch(error){removeTyping();addError(error.name==='AbortError'?'응답 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.':error.message)}finally{clearTimeout(timeout);send.disabled=false}});
+    form.addEventListener('submit',async e=>{e.preventDefault();const q=input.value.trim();if(!q)return;addUser(q);conversation.push({role:'user',content:q});input.value='';input.style.height='auto';send.disabled=true;addTyping();const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),50000);try{const response=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,history:conversation.slice(0,-1)}),signal:controller.signal});const data=await response.json();removeTyping();if(!response.ok)throw new Error(data.error||'상담 처리 중 오류가 발생했습니다.');addAnswer(data.answer,data.evidence);conversation.push({role:'assistant',content:data.answer})}catch(error){removeTyping();conversation.pop();addError(error.name==='AbortError'?'응답 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.':error.message)}finally{clearTimeout(timeout);send.disabled=false}});
 
     function addUser(text){const empty=chat.querySelector('.empty');if(empty)empty.remove();chat.insertAdjacentHTML('beforeend',`<div class="message user"><div class="avatar">나</div><div class="bubble">${escapeHtml(text)}</div></div>`);window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'})}
     function addTyping(){chat.insertAdjacentHTML('beforeend',`<div id="typing" class="message assistant"><div class="avatar">AI</div><div class="bubble">답변을 준비하고 있습니다...</div></div>`)}
