@@ -69,6 +69,12 @@ def retrieve(question, limit=12):
             if score:
                 results.append({"file": path.name, "score": score, "text": paragraph[:3000]})
     results.sort(key=lambda item: item["score"], reverse=True)
+    if not results:
+        return []
+    # 최고 점수를 받은 규정 파일만 선택해 다른 제도 설명이 섞이지 않게 합니다.
+    top_score = results[0]["score"]
+    top_files = {item["file"] for item in results if item["score"] == top_score}
+    results = [item for item in results if item["file"] in top_files]
     selected = []
     # 여러 규정이 함께 적용될 수 있으므로 규정별 상위 근거를 먼저 확보합니다.
     for path in sorted({item["file"] for item in results}):
@@ -243,6 +249,7 @@ def call_openai(question, evidence, history=None):
         "단, 사용자가 '우리 엄마', '우리 아버지', '우리 부모님'이라고 표현하면 별도 배우자 표현이 없는 한 본인 부모로 이해하고 관계를 다시 묻지 않는다. "
         "직전 대화에서 생년월일과 관계가 이미 확인되었으면 같은 질문을 반복하지 말고 회갑일 계산 결과를 안내한다. "
         "사용자가 결혼·사망·출산·동호회·숙소·출장 등 다른 제도를 새로 질문하면 이전 회갑 대화와 분리해 현재 질문의 의도와 규정만 사용한다. "
+        "현재 질문과 무관한 제도는 비교·설명·언급하지 않는다. 예를 들어 형제자매 결혼 질문에는 회갑, 숙소, 동호회, 여비를 언급하지 않는다. "
         "회갑일이 지났더라도 사유 발생일로부터 3개월 이내이면 신청 가능하다. "
         "계산 결과가 신청 마감일 이후이면 '확정하기 어렵다', '추가 확인 필요' 같은 유보 표현을 쓰지 않는다. "
         "이 경우에는 회갑일·신청 마감일·청구권 소멸을 2~3문장으로 간단히 안내한다."
