@@ -227,6 +227,35 @@ def build_hoegap_answer(question, history):
     )
 
 
+def build_sibling_marriage_answer(question):
+    """형제자매 결혼 문의는 규정 기준으로 일관되게 안내합니다."""
+    sibling_words = ("형", "누나", "언니", "오빠", "동생", "형제", "자매")
+    if "결혼" not in question or not any(word in question for word in sibling_words):
+        return ""
+    is_spouse_side = "배우자" in question or "처남" in question or "처제" in question or "시누이" in question
+    if is_spouse_side:
+        relation = "배우자 형제·자매"
+        documents = "본인 가족관계증명서, 배우자 부모 기준 가족관계증명서, 청첩장"
+    else:
+        relation = "본인 형제·자매"
+        documents = "부모 기준 가족관계증명서, 청첩장"
+    return (
+        f"네. {relation} 결혼은 경조금 지급 대상입니다.\n\n"
+        "확인 결과\n"
+        f"- 관계: {relation}\n"
+        "- 지원금: 200,000원\n"
+        f"- 필요 서류: {documents}\n"
+        "- 신청기한: 경조사 사유 발생일로부터 3개월 이내\n\n"
+        "최종 승인·지급은 담당 부서의 서류 검토를 거쳐 결정됩니다."
+    )
+
+
+def starts_new_policy_topic(question):
+    """이전 대화와 분리해야 하는 새 복리후생 질문인지 판단합니다."""
+    topic_words = ("결혼", "사망", "출산", "동호회", "숙소", "출장", "여비", "부임", "건강검진")
+    return any(word in question for word in topic_words) and "회갑" not in question
+
+
 def call_openai(question, evidence, history=None):
     """검색 근거를 포함해 Responses API를 호출합니다."""
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
@@ -300,7 +329,12 @@ class Handler(SimpleHTTPRequestHandler):
             if not question:
                 raise ValueError("질문을 입력해 주세요.")
             evidence = retrieve(question)
-            answer = build_hoegap_answer(question, body.get("history", [])) or call_openai(question, evidence, body.get("history", []))
+            history = [] if starts_new_policy_topic(question) else body.get("history", [])
+            answer = (
+                build_sibling_marriage_answer(question)
+                or build_hoegap_answer(question, history)
+                or call_openai(question, evidence, history)
+            )
             self.respond(200, {"answer": answer, "evidence": evidence})
         except (ValueError, RuntimeError, HTTPError, URLError) as error:
             self.respond(400, {"error": str(error)})
