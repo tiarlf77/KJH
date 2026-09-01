@@ -154,6 +154,47 @@ def conversation_context(question, history):
     return f"\n[대화 맥락 보완]\n{relation}\n{birthday}".strip()
 
 
+def identify_parent_relation(text):
+    """회갑 검토에 필요한 부모 관계를 정해진 표현으로 분류합니다."""
+    if any(word in text for word in ("배우자 어머니", "배우자 엄마", "배우자 아버지", "장모님", "장인어른", "시어머니", "시아버지")):
+        return "배우자 부모"
+    if any(word in text for word in ("우리 엄마", "우리 어머니", "우리 아버지", "우리 부모님", "엄마", "어머니", "아빠", "아버지", "부모님")):
+        return "본인 부모"
+    return ""
+
+
+def build_hoegap_answer(question, history):
+    """관계와 생년월일이 확인된 회갑 문의에는 일관된 검토 양식을 반환합니다."""
+    prior_text = " ".join(item.get("content", "") for item in (history or [])[-6:])
+    combined = f"{question} {prior_text}"
+    relation = identify_parent_relation(combined)
+    birth = extract_birth_date(combined)
+    if not relation or not birth or "회갑" not in combined:
+        return ""
+    today = date.today()
+    sixtieth = date(birth.year + 60, birth.month, birth.day)
+    deadline = add_months(sixtieth, 3)
+    if today < sixtieth:
+        verdict = "회갑 사유 발생일 전"
+        summary = f"회갑 사유 발생일인 {sixtieth.isoformat()}부터 신청 여부를 확인할 수 있습니다."
+    elif today <= deadline:
+        verdict = "신청 가능"
+        summary = "현재 사유 발생일로부터 3개월 이내이므로 경조금 신청이 가능합니다. 지급액은 20만 원입니다."
+    else:
+        verdict = "신청 불가"
+        summary = "신청 마감일이 지나 청구권이 소멸되어 경조금 신청이 불가능합니다."
+    return (
+        "확인 결과\n"
+        f"- 관계: {relation}\n"
+        f"- 생년월일: {birth.isoformat()}\n"
+        f"- 회갑 사유 발생일: {sixtieth.isoformat()}\n"
+        f"- 신청 마감일: {deadline.isoformat()}\n"
+        f"- 현재 기준일: {today.isoformat()}\n"
+        f"- 판정: {verdict}\n\n"
+        f"{summary}\n최종 승인·지급은 담당 부서의 서류 검토를 거쳐 결정됩니다."
+    )
+
+
 def call_openai(question, evidence, history=None):
     """검색 근거를 포함해 Responses API를 호출합니다."""
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
@@ -225,7 +266,7 @@ class Handler(SimpleHTTPRequestHandler):
             if not question:
                 raise ValueError("질문을 입력해 주세요.")
             evidence = retrieve(question)
-            answer = call_openai(question, evidence, body.get("history", []))
+            answer = build_hoegap_answer(question, body.get("history", [])) or call_openai(question, evidence, body.get("history", []))
             self.respond(200, {"answer": answer, "evidence": evidence})
         except (ValueError, RuntimeError, HTTPError, URLError) as error:
             self.respond(400, {"error": str(error)})
