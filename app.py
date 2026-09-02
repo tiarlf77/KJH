@@ -368,8 +368,27 @@ def build_housing_move_answer(question):
     """기존 숙소지원 중 타 지역 부임 문의를 지원특례와 신규 부임 기준으로 안내합니다."""
     if "숙소" not in question or not any(word in question for word in ("발령", "부임", "타지", "타 지역")):
         return ""
+    duration_match = re.search(r"숙소지원금[^\n]{0,50}?(\d+)\s*년\s*(?:(\d+)\s*개월)?\s*(?:받|수급)", question)
+    prior_duration = ""
+    if duration_match:
+        years = int(duration_match.group(1))
+        months = int(duration_match.group(2) or 0)
+        prior_duration = f"{years}년" + (f" {months}개월" if months else "")
     destination = "서울" if "서울" in question else "서울 외"
     amount = "월 60만 원" if destination == "서울" else "월 40만 원"
+    period_line = f"- 신규 부임 기본 기준: {amount}, 발령일로부터 3년간\n"
+    follow_up = ""
+    if prior_duration:
+        # 기존 수급 이력이 있으면 신규 부임의 기본 기간을 그대로 확정하지 않습니다.
+        period_line = (
+            f"- 기존 수급 이력: {prior_duration}\n"
+            f"- 신규 부임 기본 기준: {amount}, 발령일로부터 3년간\n"
+            "- 지급기간 판정: 포항 수급이 신규 채용 기준인지 부임 기준인지와 기존 적용기간을 함께 확인해야 함\n"
+        )
+        follow_up = (
+            "포항에서 받은 숙소지원금이 신규 채용 기준인지 부임 기준인지 알려주시면, "
+            "수급 이력을 반영해 광양 부임 후 실제 지원기간을 안내하겠습니다."
+        )
     return (
         "질문하신 상황은 기존 숙소지원금 수급 중 근무지가 변경되는 경우입니다.\n\n"
         "확인 결과\n"
@@ -377,9 +396,10 @@ def build_housing_move_answer(question):
         "- 연장 기준: 부득이한 경우 처분 노력 입증자료 제출 시 1개월 단위 최장 6개월\n"
         "- 중복 여부: 전 근무지 숙소 정리 비용과 현 근무지 숙소지원금은 중복 가능\n"
         f"- 신규 부임지: {destination}\n"
-        f"- 신규 부임 숙소지원금: {amount}, 발령일로부터 3년간\n"
+        f"{period_line}"
         "- 산정 기준: 월세는 월 차임만 지원, 전세는 전세금 1,000만 원당 월 10만 원\n"
         "- 필요 서류: 기존 숙소 정리 비용 증빙, 처분 노력 입증자료(연장 시), 신규 숙소 임대차계약서\n\n"
+        f"{follow_up}\n"
         "최종 지원 여부와 서류 인정 범위는 담당 부서의 규정 검토를 거쳐 결정됩니다."
     )
 
