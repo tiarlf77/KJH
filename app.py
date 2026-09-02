@@ -5,9 +5,11 @@ import calendar
 from datetime import date
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import TypedDict
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from urllib.parse import unquote
+from langgraph.graph import END, START, StateGraph
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -346,7 +348,7 @@ def starts_new_policy_topic(question):
 
 def build_clarification_answer(question):
     """제도 유형을 알 수 없는 질문에 전체 상담 범위와 재질문 형식을 안내합니다."""
-    topics = ("출장", "파견", "부임", "경조", "결혼", "회갑", "출산", "사망", "숙소", "동호회")
+    topics = ("출장", "파견", "부임", "경조", "결혼", "회갑", "출산", "사망", "돌아가", "별세", "승중상", "숙소", "동호회")
     if any(word in question for word in topics):
         return ""
     return (
@@ -452,6 +454,94 @@ def call_openai(question, evidence, history=None):
     return "\n".join(parts).strip() or "응답 내용을 확인하지 못했습니다."
 
 
+class ConsultationState(TypedDict, total=False):
+    """LangGraph가 상담 단계 사이에서 전달하는 최소 상태입니다."""
+
+    question: str
+    history: list[dict]
+    intent: str
+    evidence: list[dict]
+    answer: str
+
+
+def classify_question_node(state: ConsultationState):
+    """질문을 분류해 불명확 안내와 규정 검색의 흐름을 나눕니다."""
+    question = state["question"]
+    if build_clarification_answer(question):
+        return {"intent": "clarification"}
+    if "숙소" in question or "숙소지원금" in question:
+        return {"intent": "housing"}
+    if any(word in question for word in ("결혼", "회갑", "출산", "사망", "돌아가", "별세", "승중상")):
+        return {"intent": "ceremony"}
+    return {"intent": "policy"}
+
+
+def choose_after_classification(state: ConsultationState):
+    """불명확 질문은 검색 없이 안내하고, 나머지는 해당 규정을 검색합니다."""
+    return "clarify" if state["intent"] == "clarification" else "retrieve"
+
+
+def retrieve_policy_node(state: ConsultationState):
+    """현재 제도 질문에 맞는 규정 근거를 검색합니다."""
+    return {"evidence": retrieve(state["question"])}
+
+
+def apply_policy_rules_node(state: ConsultationState):
+    """날짜·관계·금액처럼 규정으로 결정 가능한 항목을 우선 처리합니다."""
+    question = state["question"]
+    history = [] if starts_new_policy_topic(question) else state.get("history", [])
+    marriage_answer = build_sibling_marriage_answer(question)
+    seungjungsang_answer = build_seungjungsang_answer(question)
+    hoegap_answer = build_hoegap_answer(question, history)
+    death_answer = build_death_answer(question)
+    housing_move_answer = build_housing_move_answer(question)
+    answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or housing_move_answer
+    if not answer:
+        return {}
+    if marriage_answer or seungjungsang_answer or hoegap_answer or death_answer:
+        evidence = [{"file": "경조금 지급기준.txt", "score": 1, "text": "경조금 지급기준"}]
+    else:
+        evidence = [{"file": "숙소지원금 운영 기준.txt", "score": 1, "text": "숙소지원금 운영 기준"}]
+    return {"answer": answer, "evidence": evidence}
+
+
+def choose_after_rules(state: ConsultationState):
+    """결정 규칙으로 처리하지 못한 질문만 LLM 답변 단계로 보냅니다."""
+    return "end" if state.get("answer") else "generate"
+
+
+def generate_answer_node(state: ConsultationState):
+    """규칙으로 확정할 수 없는 일반 문의를 근거 기반 LLM으로 답변합니다."""
+    question = state["question"]
+    history = [] if starts_new_policy_topic(question) else state.get("history", [])
+    return {"answer": call_openai(question, state.get("evidence", []), history)}
+
+
+def clarification_answer_node(state: ConsultationState):
+    """제도 유형이 모호한 질문에는 전체 복리후생 범위를 안내합니다."""
+    return {"answer": build_clarification_answer(state["question"]), "evidence": []}
+
+
+def build_consultation_graph():
+    """상담 요청을 분류·검색·규칙판정·생성으로 연결한 LangGraph를 만듭니다."""
+    graph = StateGraph(ConsultationState)
+    graph.add_node("classify", classify_question_node)
+    graph.add_node("retrieve", retrieve_policy_node)
+    graph.add_node("rules", apply_policy_rules_node)
+    graph.add_node("generate", generate_answer_node)
+    graph.add_node("clarify", clarification_answer_node)
+    graph.add_edge(START, "classify")
+    graph.add_conditional_edges("classify", choose_after_classification, {"clarify": "clarify", "retrieve": "retrieve"})
+    graph.add_edge("retrieve", "rules")
+    graph.add_conditional_edges("rules", choose_after_rules, {"end": END, "generate": "generate"})
+    graph.add_edge("generate", END)
+    graph.add_edge("clarify", END)
+    return graph.compile()
+
+
+CONSULTATION_GRAPH = build_consultation_graph()
+
+
 class Handler(SimpleHTTPRequestHandler):
     """정적 화면과 상담 요청을 함께 제공하는 간단한 HTTP 핸들러입니다."""
 
@@ -465,23 +555,8 @@ class Handler(SimpleHTTPRequestHandler):
             question = str(body.get("question", "")).strip()
             if not question:
                 raise ValueError("질문을 입력해 주세요.")
-            evidence = retrieve(question)
-            history = [] if starts_new_policy_topic(question) else body.get("history", [])
-            marriage_answer = build_sibling_marriage_answer(question)
-            seungjungsang_answer = build_seungjungsang_answer(question)
-            hoegap_answer = build_hoegap_answer(question, history)
-            death_answer = build_death_answer(question)
-            housing_move_answer = build_housing_move_answer(question)
-            clarification_answer = build_clarification_answer(question)
-            answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or housing_move_answer or clarification_answer or call_openai(question, evidence, history)
-            # 결정론적으로 처리한 경조금 답변은 경조금 기준만 근거로 표시합니다.
-            if marriage_answer or seungjungsang_answer or hoegap_answer or death_answer:
-                evidence = [{"file": "경조금 지급기준.txt", "score": 1, "text": "경조금 지급기준"}]
-            elif clarification_answer:
-                evidence = []
-            elif housing_move_answer:
-                evidence = [{"file": "숙소지원금 운영 기준.txt", "score": 1, "text": "숙소지원금 운영 기준"}]
-            self.respond(200, {"answer": answer, "evidence": evidence})
+            result = CONSULTATION_GRAPH.invoke({"question": question, "history": body.get("history", [])})
+            self.respond(200, {"answer": result["answer"], "evidence": result.get("evidence", [])})
         except (ValueError, RuntimeError, HTTPError, URLError) as error:
             self.respond(400, {"error": str(error)})
         except Exception:
