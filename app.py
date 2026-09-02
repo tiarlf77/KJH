@@ -85,6 +85,11 @@ def retrieve(question, limit=12):
     results.sort(key=lambda item: item["score"], reverse=True)
     if not results:
         return []
+    # 숙소지원금 질문에는 출장·여비 규정이 섞이지 않도록 전용 기준만 사용합니다.
+    if any(word in question for word in ("숙소", "숙소지원금", "주거", "월세", "전세")):
+        results = [item for item in results if item["file"] == "숙소지원금 운영 기준.txt"]
+        if not results:
+            return []
     # 최고 점수를 받은 규정 파일만 선택해 다른 제도 설명이 섞이지 않게 합니다.
     top_score = results[0]["score"]
     top_files = {item["file"] for item in results if item["score"] == top_score}
