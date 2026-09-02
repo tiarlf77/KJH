@@ -362,6 +362,26 @@ def build_clarification_answer(question):
     )
 
 
+def build_housing_move_answer(question):
+    """기존 숙소지원 중 타 지역 부임 문의를 지원특례와 신규 부임 기준으로 안내합니다."""
+    if "숙소" not in question or not any(word in question for word in ("발령", "부임", "타지", "타 지역")):
+        return ""
+    destination = "서울" if "서울" in question else "서울 외"
+    amount = "월 60만 원" if destination == "서울" else "월 40만 원"
+    return (
+        "질문하신 상황은 기존 숙소지원금 수급 중 근무지가 변경되는 경우입니다.\n\n"
+        "확인 결과\n"
+        "- 기존 숙소: 정리 기간 3개월간 숙소지원금 한도 내 실비 지원\n"
+        "- 연장 기준: 부득이한 경우 처분 노력 입증자료 제출 시 1개월 단위 최장 6개월\n"
+        "- 중복 여부: 전 근무지 숙소 정리 비용과 현 근무지 숙소지원금은 중복 가능\n"
+        f"- 신규 부임지: {destination}\n"
+        f"- 신규 부임 숙소지원금: {amount}, 발령일로부터 3년간\n"
+        "- 산정 기준: 월세는 월 차임만 지원, 전세는 전세금 1,000만 원당 월 10만 원\n"
+        "- 필요 서류: 기존 숙소 정리 비용 증빙, 처분 노력 입증자료(연장 시), 신규 숙소 임대차계약서\n\n"
+        "최종 지원 여부와 서류 인정 범위는 담당 부서의 규정 검토를 거쳐 결정됩니다."
+    )
+
+
 def call_openai(question, evidence, history=None):
     """검색 근거를 포함해 Responses API를 호출합니다."""
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
@@ -451,13 +471,16 @@ class Handler(SimpleHTTPRequestHandler):
             seungjungsang_answer = build_seungjungsang_answer(question)
             hoegap_answer = build_hoegap_answer(question, history)
             death_answer = build_death_answer(question)
+            housing_move_answer = build_housing_move_answer(question)
             clarification_answer = build_clarification_answer(question)
-            answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or clarification_answer or call_openai(question, evidence, history)
+            answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or housing_move_answer or clarification_answer or call_openai(question, evidence, history)
             # 결정론적으로 처리한 경조금 답변은 경조금 기준만 근거로 표시합니다.
             if marriage_answer or seungjungsang_answer or hoegap_answer or death_answer:
                 evidence = [{"file": "경조금 지급기준.txt", "score": 1, "text": "경조금 지급기준"}]
             elif clarification_answer:
                 evidence = []
+            elif housing_move_answer:
+                evidence = [{"file": "숙소지원금 운영 기준.txt", "score": 1, "text": "숙소지원금 운영 기준"}]
             self.respond(200, {"answer": answer, "evidence": evidence})
         except (ValueError, RuntimeError, HTTPError, URLError) as error:
             self.respond(400, {"error": str(error)})
