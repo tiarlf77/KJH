@@ -665,6 +665,24 @@ def build_domestic_trip_answer(question):
     )
 
 
+def build_parking_answer(question):
+    """해외출장·교육연수의 국내 주차비는 여비 기준에 따라 지급하지 않습니다."""
+    has_parking = any(word in question for word in ("주차", "주차비", "주차장"))
+    is_training_or_overseas = any(word in question for word in ("해외출장", "해외 출장", "교육연수", "교육 연수"))
+    is_domestic_parking = any(word in question for word in ("국내", "공항"))
+    if not (has_parking and is_training_or_overseas and is_domestic_parking):
+        return ""
+    trip_type = "교육연수" if any(word in question for word in ("교육연수", "교육 연수")) else "해외출장"
+    return (
+        f"{trip_type}을 위한 국내 주차비는 지원되지 않습니다.\n\n"
+        "확인 결과\n"
+        f"- 출장 유형: {trip_type}\n"
+        "- 비용 항목: 국내 주차비\n"
+        "- 판정: 지급 불가\n"
+        "- 근거: 교육연수 및 해외출장 시 국내 주차비는 지급하지 않음"
+    )
+
+
 def build_club_answer(question):
     """동호회 개설·가입·정기지원 문의에 공통 기준을 적용합니다."""
     if "동호회" not in question:
@@ -734,6 +752,7 @@ def call_openai(question, evidence, history=None):
         " 기존 숙소지원금 수급 중 월세와 전세의 계약 형태가 바뀌면 변경된 임대차계약서와 계약조건 확인 자료를 새로 제출하도록 안내한다."
         " 월세에서 전세로 바뀌면 전세금 1,000만원당 월 10만원, 전세에서 월세로 바뀌면 월 차임만 지원하고 관리비·공과금은 제외한다고 표시한다."
         " 계약 전환의 세부 제출서류와 적용 시점은 숙소지원금 담당자에게 문의하도록 답변을 끝낸다."
+        " 해외출장 또는 교육연수의 국내공항·국내 주차비는 지급하지 않는다고 명확히 안내한다. 회사 차량·개인 차량 여부에 따른 예외를 만들지 않는다."
         " 질문의 제도를 식별할 수 있으면 전체 복리후생 목록을 보여주지 않는다. 전체 목록은 제도와 상황을 전혀 알 수 없는 질문에서만 사용한다."
         " 모든 제도 답변은 질문에 대한 결론 한 문장, 확인 결과, 반드시 필요한 추가 확인 한두 항목 순서로 간결하게 작성한다."
     )
@@ -817,8 +836,9 @@ def apply_policy_rules_node(state: ConsultationState):
     housing_move_answer = build_housing_move_answer(question)
     relocation_answer = build_relocation_answer(question)
     trip_answer = build_domestic_trip_answer(question)
+    parking_answer = build_parking_answer(question)
     club_answer = build_club_answer(question)
-    answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or housing_exclusion_answer or housing_contract_change_answer or housing_move_answer or housing_lease_answer or relocation_answer or trip_answer or club_answer
+    answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or housing_exclusion_answer or housing_contract_change_answer or housing_move_answer or housing_lease_answer or relocation_answer or parking_answer or trip_answer or club_answer
     if not answer:
         return {}
     if marriage_answer or seungjungsang_answer or hoegap_answer or death_answer:
@@ -830,7 +850,7 @@ def apply_policy_rules_node(state: ConsultationState):
             {"file": "숙소지원금 운영 기준.txt", "score": 1, "text": "숙소지원금 운영 기준"},
             {"file": "여비관리기준.txt", "score": 1, "text": "여비관리기준"},
         ]
-    elif trip_answer:
+    elif parking_answer or trip_answer:
         evidence = [{"file": "여비관리기준.txt", "score": 1, "text": "여비관리기준"}]
     else:
         evidence = [{"file": "동호회 관리 규정.txt", "score": 1, "text": "동호회 관리 규정"}]
