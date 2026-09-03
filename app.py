@@ -666,21 +666,34 @@ def build_domestic_trip_answer(question):
 
 
 def build_parking_answer(question):
-    """해외출장·교육연수의 국내 주차비는 여비 기준에 따라 지급하지 않습니다."""
+    """국내출장 주차비와 교육연수·해외출장 주차비를 서로 다른 기준으로 안내합니다."""
     has_parking = any(word in question for word in ("주차", "주차비", "주차장"))
     is_training_or_overseas = any(word in question for word in ("해외출장", "해외 출장", "교육연수", "교육 연수"))
     is_domestic_parking = any(word in question for word in ("국내", "공항"))
-    if not (has_parking and is_training_or_overseas and is_domestic_parking):
+    is_domestic_trip = any(word in question for word in ("국내출장", "국내 출장"))
+    if not has_parking:
         return ""
-    trip_type = "교육연수" if any(word in question for word in ("교육연수", "교육 연수")) else "해외출장"
-    return (
-        f"{trip_type}을 위한 국내 주차비는 지원되지 않습니다.\n\n"
-        "확인 결과\n"
-        f"- 출장 유형: {trip_type}\n"
-        "- 비용 항목: 국내 주차비\n"
-        "- 판정: 지급 불가\n"
-        "- 근거: 교육연수 및 해외출장 시 국내 주차비는 지급하지 않음"
-    )
+    if is_training_or_overseas and is_domestic_parking:
+        trip_type = "교육연수" if any(word in question for word in ("교육연수", "교육 연수")) else "해외출장"
+        return (
+            f"{trip_type}을 위한 국내 주차비는 지원되지 않습니다.\n\n"
+            "확인 결과\n"
+            f"- 출장 유형: {trip_type}\n"
+            "- 비용 항목: 국내 주차비\n"
+            "- 판정: 지급 불가\n"
+            "- 근거: 교육연수 및 해외출장 시 국내 주차비는 지급하지 않음"
+        )
+    if is_domestic_trip:
+        return (
+            "일반 국내출장 중 유료 주차비는 별도 실비 정산 항목이 아니라 소액경비의 현지교통비 범위에서 처리합니다.\n\n"
+            "확인 결과\n"
+            "- 출장 유형: 국내출장\n"
+            "- 비용 항목: 유료 주차비\n"
+            "- 처리 기준: 소액경비 중 현지교통비로 충당\n"
+            "- 현지교통비 기준: 1일 20,000원\n\n"
+            "다만 교육연수 및 해외출장 시 발생한 국내 주차비는 지급되지 않습니다."
+        )
+    return ""
 
 
 def build_club_answer(question):
@@ -753,6 +766,7 @@ def call_openai(question, evidence, history=None):
         " 월세에서 전세로 바뀌면 전세금 1,000만원당 월 10만원, 전세에서 월세로 바뀌면 월 차임만 지원하고 관리비·공과금은 제외한다고 표시한다."
         " 계약 전환의 세부 제출서류와 적용 시점은 숙소지원금 담당자에게 문의하도록 답변을 끝낸다."
         " 해외출장 또는 교육연수의 국내공항·국내 주차비는 지급하지 않는다고 명확히 안내한다. 회사 차량·개인 차량 여부에 따른 예외를 만들지 않는다."
+        " 일반 국내출장의 유료 주차비는 별도 실비 정산 항목이 아니라 소액경비 중 현지교통비 1일 2만원 범위에서 처리한다고 안내한다."
         " 질문의 제도를 식별할 수 있으면 전체 복리후생 목록을 보여주지 않는다. 전체 목록은 제도와 상황을 전혀 알 수 없는 질문에서만 사용한다."
         " 모든 제도 답변은 질문에 대한 결론 한 문장, 확인 결과, 반드시 필요한 추가 확인 한두 항목 순서로 간결하게 작성한다."
     )
