@@ -60,6 +60,13 @@ SPOUSE_SIBLINGS = ("처제", "처형", "처남", "시누이", "시동생", "아�
 SPOUSE_CUES = ("배우자", "와이프", "아내", "남편", "부인", "wife", "husband")
 SPECIAL_LEAVE_RELATIONS = ("백숙부모", "백숙부", "매형", "매제", "제부", "형부", "올케")
 AMBIGUOUS_DEATH_RELATIONS = ("고모", "이모", "외삼촌")
+FAMILY_OWNER_WORDS = (
+    "가족", "본인", "배우자", "와이프", "아내", "남편", "부모", "엄마", "아빠", "아버지", "어머니",
+    "자녀", "아들", "딸", "형", "누나", "언니", "오빠", "동생", "형제", "자매",
+)
+LEASE_WORDS = ("전세", "월세", "임대차", "세들어", "세 들어", "계약")
+PROPERTY_WORDS = ("건물", "명의", "소유", "집", "주택")
+COHABITATION_WORDS = ("동거", "같이 살", "함께 살", "와이프와", "아내와", "남편과", "배우자와", "가족과", "자녀와", "아이와", "친구와")
 
 
 def find_workplace(question):
@@ -93,6 +100,21 @@ def extract_relocation_facts(question):
         "lives_alone": lives_alone,
         "family_elsewhere": family_elsewhere,
     }
+
+
+def find_family_owner_relation(question):
+    """가족 명의 임대차에서 확인된 소유자 관계를 짧게 표시합니다."""
+    labels = (
+        ("배우자", ("배우자", "와이프", "아내", "남편")),
+        ("부모", ("부모", "엄마", "아빠", "아버지", "어머니")),
+        ("자녀", ("자녀", "아들", "딸")),
+        ("형제·자매", ("형", "누나", "언니", "오빠", "동생", "형제", "자매")),
+        ("가족", ("가족",)),
+    )
+    for label, words in labels:
+        if any(word in question for word in words):
+            return label
+    return "가족"
 
 
 def load_env():
@@ -441,7 +463,8 @@ def build_clarification_answer(question):
     """제도 유형을 알 수 없는 질문에 전체 상담 범위와 재질문 형식을 안내합니다."""
     topics = (
         "출장", "파견", "부임", "경조", "결혼", "회갑", "출산", "사망", "돌아가", "별세", "승중상",
-        "숙소", "동호회", "발령", "이사", "부임비", "이전비", "백숙부", "매형", "매제", "제부", "형부", "올케",
+        "숙소", "동호회", "발령", "이사", "부임비", "이전비", "전세", "월세", "임대차", "건물", "명의", "동거",
+        "백숙부", "매형", "매제", "제부", "형부", "올케",
     )
     if any(word in question for word in topics):
         return ""
@@ -462,7 +485,7 @@ def build_housing_move_answer(question):
     """기존 숙소지원 중 타 지역 부임 문의를 지원특례와 신규 부임 기준으로 안내합니다."""
     has_existing_housing = any(
         word in question for word in ("기존 숙소", "기존숙소", "숙소지원금 받고", "숙소지원금을 받고", "숙소지원금 받다가", "수급", "정리", "반납", "유지")
-    )
+    ) or bool(re.search(r"기존.*숙소|숙소지원금.{0,30}(?:받|수급)", question))
     if not has_existing_housing or not any(word in question for word in ("발령", "부임", "타지", "타 지역")):
         return ""
     duration_match = re.search(r"숙소지원금[^\n]{0,50}?(\d+)\s*년\s*(?:(\d+)\s*개월)?\s*(?:받|수급)", question)
@@ -509,6 +532,48 @@ def build_housing_move_answer(question):
         f"{cleanup_cost_note}"
         f"{follow_up}\n"
         "최종 지원 여부와 서류 인정 범위는 담당 부서의 규정 검토를 거쳐 결정됩니다."
+    )
+
+
+def build_housing_exclusion_answer(question):
+    """가족 명의 임대차와 실제 동거는 숙소지원금 지급 제외로 우선 판정합니다."""
+    has_family_lease = (
+        any(word in question for word in FAMILY_OWNER_WORDS)
+        and any(word in question for word in LEASE_WORDS)
+        and any(word in question for word in PROPERTY_WORDS)
+    )
+    has_cohabitation = any(word in question for word in COHABITATION_WORDS)
+    if not has_family_lease and not has_cohabitation:
+        return ""
+    reasons = []
+    if has_family_lease:
+        relation = find_family_owner_relation(question)
+        reasons.append(f"- 임대차: {relation} 명의 건물에 전세·월세 계약")
+    if has_cohabitation:
+        reasons.append("- 실제 거주 형태: 단신부임 기준에 맞지 않는 동거")
+    reason_text = "\n".join(reasons)
+    return (
+        "숙소지원금 지원 대상이 아닙니다.\n\n"
+        "확인 결과\n"
+        f"{reason_text}\n"
+        "- 판정: 지원 불가\n"
+        "- 숙소지원금: 없음\n\n"
+        "가족 명의 건물에 전세·월세로 거주하거나 단신부임 신청 후 실제 동거하는 경우는 숙소지원금 지급 제외 기준입니다. "
+        "신청 내용이나 실제 거주 형태가 사실과 다르면 윤리위반으로 감사 대상이 될 수 있습니다."
+    )
+
+
+def build_housing_lease_answer(question):
+    """일반 임대인 전세·월세 계약은 숙소지원금 요건만 간결하게 확인합니다."""
+    if not any(word in question for word in ("전세", "월세", "임대차")):
+        return ""
+    return (
+        "일반 임대인과 체결하는 전세·월세 계약은 숙소지원금 요건을 충족하면 검토할 수 있습니다.\n\n"
+        "확인 결과\n"
+        "- 전세 지원 기준: 전세금 10,000,000원당 월 100,000원\n"
+        "- 월세 지원 기준: 월 차임만 지원하며 관리비·공과금 등은 제외\n"
+        "- 확인 조건: 새 근무지, 실제 단신 거주 여부, 본인·배우자 주택 보유 여부, 임대인과의 가족관계, 임대차계약서\n\n"
+        "계약 형태와 임대인 관계, 새 근무지를 알려주시면 지원 가능 여부를 확인해 드리겠습니다."
     )
 
 
@@ -635,6 +700,8 @@ def call_openai(question, evidence, history=None):
         " 사용자가 이미 말한 사실(관계, 날짜, 근무지, 이사 여부, 동거 여부, 질문 항목)은 다시 묻지 않는다."
         " 발령·부임·이사·부임비·이전비·가족 잔류·혼자 거주 표현이 있으면 부임 및 숙소지원금 복합 문의로 파악한다."
         " 이 경우 실제 이사하지 않으면 부임비 지급이 없다는 점을 먼저 답하고, 숙소지원금은 새 근무지·실제 단신 거주·주택 보유 여부·임대차계약서를 기준으로 필요한 만큼만 안내한다."
+        " 가족 명의(본인·배우자·부모·자녀·형제자매) 건물에 전세 또는 월세로 거주하는 경우와 단신부임으로 신청한 뒤 실제 동거인이 있는 경우는 숙소지원금 지원 불가로 안내한다."
+        " 이 경우 전세금·월세 지원금 계산을 하지 말고, '신청 내용이나 실제 거주 형태가 사실과 다르면 윤리위반으로 감사 대상이 될 수 있습니다.'라고 짧게 경고한다."
         " 질문의 제도를 식별할 수 있으면 전체 복리후생 목록을 보여주지 않는다. 전체 목록은 제도와 상황을 전혀 알 수 없는 질문에서만 사용한다."
         " 모든 제도 답변은 질문에 대한 결론 한 문장, 확인 결과, 반드시 필요한 추가 확인 한두 항목 순서로 간결하게 작성한다."
     )
@@ -712,16 +779,18 @@ def apply_policy_rules_node(state: ConsultationState):
     seungjungsang_answer = build_seungjungsang_answer(question)
     hoegap_answer = build_hoegap_answer(question, history)
     death_answer = build_death_answer(question)
+    housing_exclusion_answer = build_housing_exclusion_answer(question)
+    housing_lease_answer = build_housing_lease_answer(question)
     housing_move_answer = build_housing_move_answer(question)
     relocation_answer = build_relocation_answer(question)
     trip_answer = build_domestic_trip_answer(question)
     club_answer = build_club_answer(question)
-    answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or housing_move_answer or relocation_answer or trip_answer or club_answer
+    answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or housing_exclusion_answer or housing_move_answer or housing_lease_answer or relocation_answer or trip_answer or club_answer
     if not answer:
         return {}
     if marriage_answer or seungjungsang_answer or hoegap_answer or death_answer:
         evidence = [{"file": "경조금 지급기준.txt", "score": 1, "text": "경조금 지급기준"}]
-    elif housing_move_answer:
+    elif housing_exclusion_answer or housing_lease_answer or housing_move_answer:
         evidence = [{"file": "숙소지원금 운영 기준.txt", "score": 1, "text": "숙소지원금 운영 기준"}]
     elif relocation_answer:
         evidence = [
