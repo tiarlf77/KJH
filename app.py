@@ -38,6 +38,18 @@ QUERY_SYNONYMS = {
     "시동생": {"배우자", "형제", "자매"},
     "아주버님": {"배우자", "형제", "자매"},
     "도련님": {"배우자", "형제", "자매"},
+    "고모": {"부모", "형제", "자매"},
+    "이모": {"외조부모", "부모", "형제", "자매"},
+    "외삼촌": {"외조부모", "부모", "형제", "자매"},
+    "큰아버지": {"조부모", "부모", "형제"},
+    "작은아버지": {"조부모", "부모", "형제"},
+    "백숙부": {"조부모", "부모", "형제"},
+    "백숙부모": {"조부모", "부모", "형제"},
+    "매형": {"형제", "자매"},
+    "매제": {"형제", "자매"},
+    "제부": {"형제", "자매"},
+    "형부": {"형제", "자매"},
+    "올케": {"형제", "자매"},
     "와이프": {"배우자"},
     "아내": {"배우자"},
     "남편": {"배우자"},
@@ -46,6 +58,15 @@ QUERY_SYNONYMS = {
 OWN_SIBLINGS = ("형", "누나", "언니", "오빠", "남동생", "여동생", "동생", "형제", "자매")
 SPOUSE_SIBLINGS = ("처제", "처형", "처남", "시누이", "시동생", "아주버님", "도련님")
 SPOUSE_CUES = ("배우자", "와이프", "아내", "남편", "부인", "wife", "husband")
+AMBIGUOUS_DEATH_RELATIONS = ("백숙부", "고모", "이모", "외삼촌", "매형", "매제", "제부", "형부", "올케")
+
+
+def find_workplace(question):
+    """질문에 드러난 사업장을 답변에만 사용합니다."""
+    for workplace in ("포항", "광양", "세종", "서울"):
+        if workplace in question:
+            return workplace
+    return ""
 
 
 def load_env():
@@ -278,16 +299,31 @@ def build_sibling_marriage_answer(question):
 
 
 def build_seungjungsang_answer(question):
-    """승중상 문의는 규정에 명시된 금액과 서류를 고정해 안내합니다."""
+    """승중상은 인정 조건이 확인된 경우에만 지급 기준을 안내합니다."""
     if "승중상" not in question:
         return ""
+    confirmed = all(word in question for word in ("아버지", "장손", "상주")) and any(
+        word in question for word in ("돌아가", "사망", "별세")
+    )
+    if not confirmed:
+        return (
+            "승중상은 조부모상에서 부친이 이미 사망해 장손자가 상주를 맡는 경우를 말합니다.\n\n"
+            "확인 결과\n"
+            "- 관계: 승중상 인정 조건 확인 필요\n"
+            "- 확인 사항: 부친 사망 여부, 장손자 여부, 상주 여부\n"
+            "- 필요 서류: 부친 사망 증빙, 본인 가족관계증명서, 상주 확인 자료, 부고장\n\n"
+            "위 조건이 확인되면 경조금 500,000원과 화환·장례용품 지원 여부를 안내할 수 있습니다."
+        )
     return (
         "경조금 지급 대상입니다.\n\n"
         "확인 결과\n"
         "- 관계: 승중상\n"
         "- 판정: 지원 대상\n"
         "- 지원금: 500,000원\n"
-        "- 필요 서류: 기본증명서(상세, 사망일 표기 확인), 가족관계증명서, 부고장\n\n"
+        "- 화환: O\n"
+        "- 장례용품: O\n"
+        "- 필요 서류: 기본증명서(상세, 사망일 표기 확인), 본인 가족관계증명서, 부친 사망 증빙, 장손자·상주 확인 자료, 부고장\n"
+        "- 신청기한: 사유 발생일 당일부터 3개월 이내\n\n"
         "○ 회사 경조 담당 업체(경조물품,화환 등)\n"
         "- 현진시닝 : 1600-0113(24시간)\n\n"
         "최종 승인·지급은 담당 부서의 서류 검토를 거쳐 결정됩니다."
@@ -298,6 +334,15 @@ def build_death_answer(question):
     """사망 경조금 문의를 관계별로 판정해 불필요한 반복 없이 안내합니다."""
     if not any(word in question for word in ("돌아가", "사망", "별세", "상") ):
         return ""
+    if any(word in question for word in AMBIGUOUS_DEATH_RELATIONS):
+        return (
+            "질문의 관계는 경조금 지급대상 표에 명시되어 있지 않아 지원금액을 단정할 수 없습니다.\n\n"
+            "확인 결과\n"
+            "- 관계: 가족관계 및 적용 기준 확인 필요\n"
+            "- 판정: 노사발전그룹 검토 필요\n"
+            "- 제출 가능 서류: 기본증명서(상세, 사망일 표기 확인), 가족관계증명서, 관계를 확인할 수 있는 추가 가족관계증명서, 부고장\n\n"
+            "경조금 지급기준에는 해당 관계의 사망 관련 제출서류 기준만 확인됩니다."
+        )
     asks_items = any(word in question for word in ("물품", "화환", "장례용품", "조화"))
     relation_amount = (
         (("시아버지", "시어머니", "장인어른", "장모님", "배우자 부모"), "배우자 부모", "1,000,000원"),
@@ -322,9 +367,13 @@ def build_death_answer(question):
             wreath = "X" if relation == "본인 및 배우자 형제·자매" else "O"
             supplies = "O" if relation in ("본인", "배우자", "본인 부모", "배우자 부모", "자녀") else "X"
             item_line = f"- 화환: {wreath}\n- 장례용품: {supplies}\n"
-            documents = "기본증명서(상세, 사망일 표기 확인), 가족관계증명서, 부고장"
-            if relation == "본인 외조부모":
+            documents = "기본증명서(상세, 사망일 표기 확인), 본인 가족관계증명서, 부고장"
+            if relation == "본인 및 배우자 조부모":
+                documents = "기본증명서(상세, 사망일 표기 확인), 아버지 기준 가족관계증명서, 부고장"
+            elif relation == "본인 외조부모":
                 documents = "기본증명서(상세, 사망일 표기 확인), 어머니 기준 가족관계증명서, 부고장"
+            elif relation == "배우자 부모":
+                documents = "기본증명서(상세, 사망일 표기 확인), 배우자 기준 가족관계증명서, 부고장"
             return (
                 f"{opening}\n\n"
                 "확인 결과\n"
@@ -374,9 +423,10 @@ def build_housing_move_answer(question):
         years = int(duration_match.group(1))
         months = int(duration_match.group(2) or 0)
         prior_duration = f"{years}년" + (f" {months}개월" if months else "")
-    destination = "서울" if "서울" in question else "서울 외"
+    destination_workplace = find_workplace(question)
+    destination = "서울" if destination_workplace == "서울" else "서울 외"
     amount = "월 60만 원" if destination == "서울" else "월 40만 원"
-    asks_cleanup_cost = any(word in question for word in ("내 돈", "본인 부담", "비용", "정리 못", "정리 못해"))
+    asks_cleanup_cost = any(word in question for word in ("내 돈", "본인 부담", "비용", "정리 못", "정리 못해", "청소", "위약금", "중개"))
     period_line = f"- 신규 부임 기본 기준: {amount}, 발령일로부터 3년간\n"
     follow_up = ""
     if prior_duration:
@@ -384,7 +434,7 @@ def build_housing_move_answer(question):
         period_line = (
             f"- 기존 수급 이력: {prior_duration}\n"
             f"- 신규 부임 기본 기준: {amount}, 발령일로부터 3년간\n"
-            "- 지급기간 판정: 포항 수급이 신규 채용 기준인지 부임 기준인지와 기존 적용기간을 함께 확인해야 함\n"
+            "- 지급기간 판정: 기존 근무지 수급이 신규 채용 기준인지 부임 기준인지와 기존 적용기간을 함께 확인해야 함\n"
         )
         follow_up = (
             "기존 근무지에서 받은 숙소지원금이 신규 채용 기준인지 부임 기준인지 알려주시면, "
@@ -394,7 +444,8 @@ def build_housing_move_answer(question):
     if asks_cleanup_cost:
         cleanup_cost_note = (
             "기존 숙소 정리 기간에 발생하는 비용은 3개월간 한도 내 실비 지원 대상입니다. "
-            "다만 계약기간과 관계없는 청소비 등 기타 비용은 지원 대상에서 제외됩니다.\n"
+            "다만 계약기간과 관계없는 청소비 등 기타 비용은 지원 대상에서 제외됩니다. "
+            "중개수수료·위약금·이사비·관리비의 인정 여부는 현재 규정에 명시되어 있지 않아 증빙과 함께 노사발전그룹 검토가 필요합니다.\n"
         )
     return (
         "질문하신 상황은 기존 숙소지원금 수급 중 근무지가 변경되는 경우입니다.\n\n"
@@ -402,13 +453,50 @@ def build_housing_move_answer(question):
         "- 기존 숙소: 정리 기간 3개월간 숙소지원금 한도 내 실비 지원\n"
         "- 연장 기준: 부득이한 경우 처분 노력 입증자료 제출 시 1개월 단위 최장 6개월\n"
         "- 중복 여부: 전 근무지 숙소 정리 비용과 현 근무지 숙소지원금은 중복 가능\n"
-        f"- 신규 부임지: {destination}\n"
+        f"- 신규 부임지: {destination_workplace or destination}\n"
         f"{period_line}"
         "- 산정 기준: 월세는 월 차임만 지원, 전세는 전세금 1,000만 원당 월 10만 원\n"
-        "- 필요 서류: 기존 숙소 정리 비용 증빙, 처분 노력 입증자료(연장 시), 신규 숙소 임대차계약서\n\n"
+        "- 통근버스: 포항·세종 사업장 통근버스 운행 시 숙소지원금 지급 중단\n"
+        "- 필요 서류: 기존 숙소 정리 비용 증빙, 처분 노력 입증자료(연장 시: 부동산 또는 매물 웹사이트 게시 자료 등), 신규 숙소 임대차계약서\n\n"
         f"{cleanup_cost_note}"
         f"{follow_up}\n"
         "최종 지원 여부와 서류 인정 범위는 담당 부서의 규정 검토를 거쳐 결정됩니다."
+    )
+
+
+def build_domestic_trip_answer(question):
+    """국내 출장의 핵심 지급 기준은 모델 해석 없이 고정 안내합니다."""
+    if not any(word in question for word in ("출장", "국내여비", "교통비", "숙박비", "식비", "현지교통비")):
+        return ""
+    if any(word in question for word in ("해외", "파견", "부임")):
+        return ""
+    return (
+        "국내 출장 여비는 사후 정산으로 지급합니다.\n\n"
+        "확인 결과\n"
+        "- 교통비: 철도·선박·항공·자동차 실비\n"
+        "- 자가용: 유류비·통행료·감가상각비(50원/km) 실비, 통행료 영수증 필요\n"
+        "- 숙박비: 1박 100,000원 한도 내 실비\n"
+        "- 소액경비: 식비 1일 30,000원, 현지교통비 1일 20,000원\n"
+        "- 식비 차감: 외부 또는 내부에서 제공받은 식사는 1회당 10,000원 차감\n"
+        "- 정산: 귀임 후 30일 이내 증빙 제출\n\n"
+        "출장 목적·기간·교통수단·숙박 여부를 알려주시면 적용 가능한 항목만 정리해 드리겠습니다."
+    )
+
+
+def build_club_answer(question):
+    """동호회 개설·가입·정기지원 문의에 공통 기준을 적용합니다."""
+    if "동호회" not in question:
+        return ""
+    return (
+        "동호회 지원은 노사발전그룹의 등록·활동 실적 확인 후 지급됩니다.\n\n"
+        "확인 결과\n"
+        "- 결성·활동 최소 인원: 5명\n"
+        "- 가입: 소속 사업장과 실근무지를 합해 1인 최대 2개, 동일 분야 이중 가입 불가\n"
+        "- 정기지원: 분기별 1회 이상 활동 시 1인 30,000원, 최대 300,000원\n"
+        "- 특별지원: 연간 2회, 1인 10,000원, 최대 300,000원\n"
+        "- 지급 시기: 분기 활동 후 실적 등록 및 검토 완료 후 지급\n"
+        "- 필요 서류: 활동실적 보고서, 영수증, 활동사진, 전체 회원·참석자 명단\n\n"
+        "신규 동호회는 등록 3개월 이후부터 지원하며, 향우회·동문회·부서 친목회는 지원 대상이 아닙니다."
     )
 
 
@@ -449,6 +537,11 @@ def call_openai(question, evidence, history=None):
         "회갑일이 지났더라도 사유 발생일로부터 3개월 이내이면 신청 가능하다. "
         "계산 결과가 신청 마감일 이후이면 '확정하기 어렵다', '추가 확인 필요' 같은 유보 표현을 쓰지 않는다. "
         "이 경우에는 회갑일·신청 마감일·청구권 소멸을 2~3문장으로 간단히 안내한다."
+        " 경조금 청구기한은 사유 발생일 당일부터 3개월 이내이며, 주말·공휴일도 별도 연장하지 않는다."
+        " 백숙부모·고모·이모·매형·매제·제부·형부·올케 사망처럼 지급대상 표에 없는 관계는 지급 여부나 금액을 만들지 말고 노사발전그룹 검토로 안내한다."
+        " 승중상은 부친 사망으로 장손자가 조부모상의 상주가 된 경우에만 인정한다."
+        " 국내 출장은 교통비 실비, 숙박비 1박 10만원 한도, 식비 1일 3만원, 현지교통비 1일 2만원을 기준으로 한다. 제공된 식사는 1회당 식비 1만원을 차감한다."
+        " 동호회 정기지원은 분기 1회 이상 활동 시 인당 3만원·최대 30만원이며 영수증·활동사진·참석자 명단이 필요하다."
     )
     conversation = []
     for item in (history or [])[-8:]:
@@ -523,13 +616,19 @@ def apply_policy_rules_node(state: ConsultationState):
     hoegap_answer = build_hoegap_answer(question, history)
     death_answer = build_death_answer(question)
     housing_move_answer = build_housing_move_answer(question)
-    answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or housing_move_answer
+    trip_answer = build_domestic_trip_answer(question)
+    club_answer = build_club_answer(question)
+    answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or housing_move_answer or trip_answer or club_answer
     if not answer:
         return {}
     if marriage_answer or seungjungsang_answer or hoegap_answer or death_answer:
         evidence = [{"file": "경조금 지급기준.txt", "score": 1, "text": "경조금 지급기준"}]
-    else:
+    elif housing_move_answer:
         evidence = [{"file": "숙소지원금 운영 기준.txt", "score": 1, "text": "숙소지원금 운영 기준"}]
+    elif trip_answer:
+        evidence = [{"file": "여비관리기준.txt", "score": 1, "text": "여비관리기준"}]
+    else:
+        evidence = [{"file": "동호회 관리 규정.txt", "score": 1, "text": "동호회 관리 규정"}]
     return {"answer": answer, "evidence": evidence}
 
 
