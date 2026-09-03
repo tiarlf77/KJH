@@ -64,10 +64,35 @@ AMBIGUOUS_DEATH_RELATIONS = ("고모", "이모", "외삼촌")
 
 def find_workplace(question):
     """질문에 드러난 사업장을 답변에만 사용합니다."""
+    destination_match = re.search(r"(?:에서|→|->)\s*(포항|광양|세종|서울)\s*(?:로|으로)", question)
+    if destination_match:
+        return destination_match.group(1)
     for workplace in ("포항", "광양", "세종", "서울"):
         if workplace in question:
             return workplace
     return ""
+
+
+def is_relocation_question(question):
+    """발령에 따른 부임비·이전비·숙소지원금 복합 문의를 식별합니다."""
+    relocation_words = ("발령", "부임", "부임비", "이전비", "이사")
+    return any(word in question for word in relocation_words)
+
+
+def extract_relocation_facts(question):
+    """부임 질문에서 이미 알려진 사실을 뽑아 같은 내용을 재질문하지 않습니다."""
+    compact_question = question.replace(" ", "")
+    not_moving = bool(re.search(r"(?:이사|이전)(?:는|를|가)?(?:하지)?않", compact_question)) or bool(
+        re.search(r"(?:이사|이전)(?:는|를|가)?안", compact_question)
+    )
+    lives_alone = any(word in question for word in ("혼자", "단신", "나만", "본인만"))
+    family_elsewhere = any(word in question for word in ("가족은", "배우자는", "아이들은", "자녀는"))
+    return {
+        "destination": find_workplace(question),
+        "not_moving": not_moving,
+        "lives_alone": lives_alone,
+        "family_elsewhere": family_elsewhere,
+    }
 
 
 def load_env():
@@ -408,7 +433,7 @@ def build_death_answer(question):
 
 def starts_new_policy_topic(question):
     """이전 대화와 분리해야 하는 새 복리후생 질문인지 판단합니다."""
-    topic_words = ("결혼", "사망", "출산", "동호회", "숙소", "출장", "여비", "부임", "건강검진")
+    topic_words = ("결혼", "사망", "출산", "동호회", "숙소", "출장", "여비", "부임", "발령", "이사", "부임비", "이전비", "건강검진")
     return any(word in question for word in topic_words) and "회갑" not in question
 
 
@@ -416,7 +441,7 @@ def build_clarification_answer(question):
     """제도 유형을 알 수 없는 질문에 전체 상담 범위와 재질문 형식을 안내합니다."""
     topics = (
         "출장", "파견", "부임", "경조", "결혼", "회갑", "출산", "사망", "돌아가", "별세", "승중상",
-        "숙소", "동호회", "백숙부", "매형", "매제", "제부", "형부", "올케",
+        "숙소", "동호회", "발령", "이사", "부임비", "이전비", "백숙부", "매형", "매제", "제부", "형부", "올케",
     )
     if any(word in question for word in topics):
         return ""
@@ -435,7 +460,10 @@ def build_clarification_answer(question):
 
 def build_housing_move_answer(question):
     """기존 숙소지원 중 타 지역 부임 문의를 지원특례와 신규 부임 기준으로 안내합니다."""
-    if "숙소" not in question or not any(word in question for word in ("발령", "부임", "타지", "타 지역")):
+    has_existing_housing = any(
+        word in question for word in ("기존 숙소", "기존숙소", "숙소지원금 받고", "숙소지원금을 받고", "숙소지원금 받다가", "수급", "정리", "반납", "유지")
+    )
+    if not has_existing_housing or not any(word in question for word in ("발령", "부임", "타지", "타 지역")):
         return ""
     duration_match = re.search(r"숙소지원금[^\n]{0,50}?(\d+)\s*년\s*(?:(\d+)\s*개월)?\s*(?:받|수급)", question)
     prior_duration = ""
@@ -481,6 +509,46 @@ def build_housing_move_answer(question):
         f"{cleanup_cost_note}"
         f"{follow_up}\n"
         "최종 지원 여부와 서류 인정 범위는 담당 부서의 규정 검토를 거쳐 결정됩니다."
+    )
+
+
+def build_relocation_answer(question):
+    """부임비·이전비와 숙소지원금을 질문 의도에 맞춰 함께 안내합니다."""
+    if not is_relocation_question(question):
+        return ""
+    facts = extract_relocation_facts(question)
+    destination = facts["destination"]
+    if not destination:
+        return (
+            "발령에 따른 부임비·이전비와 숙소지원금은 각각 기준이 다릅니다.\n\n"
+            "확인 결과\n"
+            "- 부임비·이전비: 실제 이사 여부에 따라 판단\n"
+            "- 숙소지원금: 새 근무지, 실제 단신 거주, 주택 보유 여부에 따라 판단\n\n"
+            "발령받은 근무지역과 이사 여부를 알려주시면 적용되는 지원만 안내해 드리겠습니다."
+        )
+    is_seoul = destination == "서울"
+    housing_amount = "월 600,000원" if is_seoul else "월 400,000원"
+    housing_line = f"- 숙소지원금 기준: {destination} 신규 부임 시 {housing_amount}, 발령일로부터 최대 3년\n"
+    if facts["not_moving"]:
+        opening = "이사를 하지 않으면 부임비와 이전비는 지급되지 않습니다."
+        moving_line = "- 부임비·이전비: 이사하지 않으면 지급 없음\n"
+    else:
+        opening = "부임비와 이전비는 실제 이사 여부와 이사·중개 비용 증빙을 기준으로 판단합니다."
+        moving_line = "- 부임비·이전비: 실제 이사 여부와 이사·중개 비용 증빙을 기준으로 판단\n"
+    residence_line = "- 거주 계획: 본인이 새 근무지에서 혼자 거주 예정\n" if facts["lives_alone"] else ""
+    if facts["family_elsewhere"]:
+        residence_line += "- 가족 거주지: 기존 지역에 거주 예정\n"
+    next_question = "새 근무지 숙소의 임대차계약 여부와 본인·배우자 주택 보유 여부를 알려주시면 숙소지원금 가능 여부를 확인해 드리겠습니다."
+    return (
+        f"{opening} 다만 {destination}에 별도 숙소를 구해 실제로 혼자 거주한다면 숙소지원금 대상 여부를 검토할 수 있습니다.\n\n"
+        "확인 결과\n"
+        f"- 신규 부임지: {destination}\n"
+        f"{moving_line}"
+        f"{residence_line}"
+        f"{housing_line}"
+        "- 숙소지원금 확인 조건: 새 근무지 주택 보유 여부, 실제 단신 거주 여부, 타지역 생활근거지, 임대차계약서\n"
+        "- 신청기한: 발령일이 속한 달의 다음 달부터 6개월 이내\n\n"
+        f"{next_question}"
     )
 
 
@@ -564,6 +632,11 @@ def call_openai(question, evidence, history=None):
         "해당 비용은 기본 3개월, 처분 노력 입증자료 제출 시 1개월씩 최대 3회 연장하여 최장 6개월(3개월+1개월+1개월+1개월)까지 지원할 수 있다. 청소비는 제외한다."
         " 국내 출장은 교통비 실비, 숙박비 1박 10만원 한도, 식비 1일 3만원, 현지교통비 1일 2만원을 기준으로 한다. 제공된 식사는 1회당 식비 1만원을 차감한다."
         " 동호회 정기지원은 분기 1회 이상 활동 시 인당 3만원·최대 30만원이며 영수증·활동사진·참석자 명단이 필요하다."
+        " 사용자가 이미 말한 사실(관계, 날짜, 근무지, 이사 여부, 동거 여부, 질문 항목)은 다시 묻지 않는다."
+        " 발령·부임·이사·부임비·이전비·가족 잔류·혼자 거주 표현이 있으면 부임 및 숙소지원금 복합 문의로 파악한다."
+        " 이 경우 실제 이사하지 않으면 부임비 지급이 없다는 점을 먼저 답하고, 숙소지원금은 새 근무지·실제 단신 거주·주택 보유 여부·임대차계약서를 기준으로 필요한 만큼만 안내한다."
+        " 질문의 제도를 식별할 수 있으면 전체 복리후생 목록을 보여주지 않는다. 전체 목록은 제도와 상황을 전혀 알 수 없는 질문에서만 사용한다."
+        " 모든 제도 답변은 질문에 대한 결론 한 문장, 확인 결과, 반드시 필요한 추가 확인 한두 항목 순서로 간결하게 작성한다."
     )
     conversation = []
     for item in (history or [])[-8:]:
@@ -612,6 +685,8 @@ def classify_question_node(state: ConsultationState):
     question = state["question"]
     if build_clarification_answer(question):
         return {"intent": "clarification"}
+    if is_relocation_question(question):
+        return {"intent": "relocation"}
     if "숙소" in question or "숙소지원금" in question:
         return {"intent": "housing"}
     if any(word in question for word in ("결혼", "회갑", "출산", "사망", "돌아가", "별세", "승중상")):
@@ -638,15 +713,21 @@ def apply_policy_rules_node(state: ConsultationState):
     hoegap_answer = build_hoegap_answer(question, history)
     death_answer = build_death_answer(question)
     housing_move_answer = build_housing_move_answer(question)
+    relocation_answer = build_relocation_answer(question)
     trip_answer = build_domestic_trip_answer(question)
     club_answer = build_club_answer(question)
-    answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or housing_move_answer or trip_answer or club_answer
+    answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or housing_move_answer or relocation_answer or trip_answer or club_answer
     if not answer:
         return {}
     if marriage_answer or seungjungsang_answer or hoegap_answer or death_answer:
         evidence = [{"file": "경조금 지급기준.txt", "score": 1, "text": "경조금 지급기준"}]
     elif housing_move_answer:
         evidence = [{"file": "숙소지원금 운영 기준.txt", "score": 1, "text": "숙소지원금 운영 기준"}]
+    elif relocation_answer:
+        evidence = [
+            {"file": "숙소지원금 운영 기준.txt", "score": 1, "text": "숙소지원금 운영 기준"},
+            {"file": "여비관리기준.txt", "score": 1, "text": "여비관리기준"},
+        ]
     elif trip_answer:
         evidence = [{"file": "여비관리기준.txt", "score": 1, "text": "여비관리기준"}]
     else:
