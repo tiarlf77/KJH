@@ -577,6 +577,35 @@ def build_housing_lease_answer(question):
     )
 
 
+def build_housing_contract_change_answer(question):
+    """기존 수급자의 월세·전세 전환은 변경 계약 기준과 증빙을 안내합니다."""
+    if not ("월세" in question and "전세" in question):
+        return ""
+    if not any(word in question for word in ("바꾸", "변경", "전환", "바뀌", "받고", "수급")):
+        return ""
+    monthly_first = question.find("월세") < question.find("전세")
+    if monthly_first:
+        change = "월세 → 전세"
+        standard = "전세금 10,000,000원당 월 100,000원"
+        documents = "변경된 임대차계약서, 계약조건 확인 자료"
+        opening = "월세와 전세 간 계약 형태가 변경되면, 변경된 계약 기준으로 숙소지원금을 산정하기 위해 관련 증빙서류를 새로 제출해야 합니다."
+    else:
+        change = "전세 → 월세"
+        standard = "월 차임만 지원하며 관리비·공과금은 제외"
+        documents = "변경된 임대차계약서, 월세 이체내역, 계약조건 확인 자료"
+        opening = "전세와 월세 간 계약 형태가 변경되면, 변경된 계약 기준으로 숙소지원금을 산정하기 위해 관련 증빙서류를 새로 제출해야 합니다."
+    return (
+        f"{opening}\n\n"
+        "확인 결과\n"
+        f"- 변경 내용: {change}\n"
+        "- 필요 조치: 변경된 임대차계약서와 계약조건 확인 자료 제출\n"
+        f"- 변경 후 지원 기준: {standard}\n"
+        "- 지원 산정: 변경된 계약 형태 기준으로 재산정\n"
+        f"- 필요 서류: {documents}\n\n"
+        "세부 제출서류와 적용 시점은 숙소지원금 담당자에게 문의해 주세요."
+    )
+
+
 def build_relocation_answer(question):
     """부임비·이전비와 숙소지원금을 질문 의도에 맞춰 함께 안내합니다."""
     if not is_relocation_question(question):
@@ -702,6 +731,9 @@ def call_openai(question, evidence, history=None):
         " 이 경우 실제 이사하지 않으면 부임비 지급이 없다는 점을 먼저 답하고, 숙소지원금은 새 근무지·실제 단신 거주·주택 보유 여부·임대차계약서를 기준으로 필요한 만큼만 안내한다."
         " 가족 명의(본인·배우자·부모·자녀·형제자매) 건물에 전세 또는 월세로 거주하는 경우와 단신부임으로 신청한 뒤 실제 동거인이 있는 경우는 숙소지원금 지원 불가로 안내한다."
         " 이 경우 전세금·월세 지원금 계산을 하지 말고, '신청 내용이나 실제 거주 형태가 사실과 다르면 윤리위반으로 감사 대상이 될 수 있습니다.'라고 짧게 경고한다."
+        " 기존 숙소지원금 수급 중 월세와 전세의 계약 형태가 바뀌면 변경된 임대차계약서와 계약조건 확인 자료를 새로 제출하도록 안내한다."
+        " 월세에서 전세로 바뀌면 전세금 1,000만원당 월 10만원, 전세에서 월세로 바뀌면 월 차임만 지원하고 관리비·공과금은 제외한다고 표시한다."
+        " 계약 전환의 세부 제출서류와 적용 시점은 숙소지원금 담당자에게 문의하도록 답변을 끝낸다."
         " 질문의 제도를 식별할 수 있으면 전체 복리후생 목록을 보여주지 않는다. 전체 목록은 제도와 상황을 전혀 알 수 없는 질문에서만 사용한다."
         " 모든 제도 답변은 질문에 대한 결론 한 문장, 확인 결과, 반드시 필요한 추가 확인 한두 항목 순서로 간결하게 작성한다."
     )
@@ -781,16 +813,17 @@ def apply_policy_rules_node(state: ConsultationState):
     death_answer = build_death_answer(question)
     housing_exclusion_answer = build_housing_exclusion_answer(question)
     housing_lease_answer = build_housing_lease_answer(question)
+    housing_contract_change_answer = build_housing_contract_change_answer(question)
     housing_move_answer = build_housing_move_answer(question)
     relocation_answer = build_relocation_answer(question)
     trip_answer = build_domestic_trip_answer(question)
     club_answer = build_club_answer(question)
-    answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or housing_exclusion_answer or housing_move_answer or housing_lease_answer or relocation_answer or trip_answer or club_answer
+    answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or housing_exclusion_answer or housing_contract_change_answer or housing_move_answer or housing_lease_answer or relocation_answer or trip_answer or club_answer
     if not answer:
         return {}
     if marriage_answer or seungjungsang_answer or hoegap_answer or death_answer:
         evidence = [{"file": "경조금 지급기준.txt", "score": 1, "text": "경조금 지급기준"}]
-    elif housing_exclusion_answer or housing_lease_answer or housing_move_answer:
+    elif housing_exclusion_answer or housing_contract_change_answer or housing_lease_answer or housing_move_answer:
         evidence = [{"file": "숙소지원금 운영 기준.txt", "score": 1, "text": "숙소지원금 운영 기준"}]
     elif relocation_answer:
         evidence = [
