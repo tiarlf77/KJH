@@ -653,6 +653,19 @@ def build_domestic_trip_answer(question):
         return ""
     if any(word in question for word in ("해외", "파견", "부임")):
         return ""
+    early_departure = any(word in question for word in ("일요일", "전일", "선출발", "미리 출발", "하루 전"))
+    monday_start = any(word in question for word in ("월요일부터", "월요일 부터", "월요일에 시작", "월요일 출장"))
+    if early_departure and monday_start:
+        return (
+            "국내출장에서 일요일에 선출발하여 월요일부터 출장하는 경우, 제공된 규정만으로는 "
+            "일요일 숙박비 및 소액경비 지급 여부를 명확히 확인할 수 없습니다.\n\n"
+            "확인 결과\n"
+            "- 해외출장: 전일 이동이 불가피한 경우 국내여비 기준에 따라 숙박비·시외교통비·1일분 소액경비 지급\n"
+            "- 국내출장: 일요일 선출발에 동일 기준을 적용한다는 명시적 규정 확인 필요\n"
+            "- 판정: 주관 부서 확인 필요\n\n"
+            "출장명령서, 실제 이동일, 출장지 및 선출발 사유를 확인한 뒤 주관 부서에 "
+            "지급 가능 여부를 문의해 주세요. 최종 지급 여부는 주관 부서의 승인 및 증빙자료 검토를 거쳐 결정됩니다."
+        )
     return (
         "국내 출장 여비는 사후 정산으로 지급합니다.\n\n"
         "확인 결과\n"
