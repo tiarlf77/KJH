@@ -2,6 +2,7 @@ import json
 import os
 import re
 import calendar
+from datetime import datetime
 from datetime import date
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -906,18 +907,70 @@ def build_consultation_graph():
 
 
 CONSULTATION_GRAPH = build_consultation_graph()
+INQUIRY_HISTORY = []
+
+
+def build_inquiry_draft(question, answer, evidence):
+    """상담 결과를 담당자 문의 메일 초안으로 변환합니다."""
+    evidence_lines = "\n".join(
+        f"- {item.get('file', '관련 규정')}"
+        for item in evidence
+    ) or "- 확인된 규정 근거 없음"
+    body = (
+        "안녕하세요.\n"
+        "복리후생 지원 가능 여부를 확인 부탁드립니다.\n\n"
+        "[문의 내용]\n"
+        f"{question}\n\n"
+        "[AI 사전 검토 내용]\n"
+        f"{answer}\n\n"
+        "[관련 규정]\n"
+        f"{evidence_lines}\n\n"
+        "최종 지원 가능 여부와 필요한 추가 서류를 확인해 주시면 감사하겠습니다.\n\n"
+        "감사합니다.\n복리후생 상담 시스템 드림"
+    )
+    return {
+        "recipient": "복리후생 담당 부서",
+        "recipient_email": "welfare-demo@example.com",
+        "subject": "복리후생 지원 가능 여부 확인 요청",
+        "body": body,
+        "evidence": evidence,
+    }
 
 
 class Handler(SimpleHTTPRequestHandler):
     """정적 화면과 상담 요청을 함께 제공하는 간단한 HTTP 핸들러입니다."""
 
     def do_POST(self):
-        if self.path != "/api/chat":
+        if self.path not in ("/api/chat", "/api/inquiries/draft", "/api/inquiries/send"):
             self.send_error(404)
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
             body = json.loads(self.rfile.read(length).decode("utf-8"))
+            if self.path == "/api/inquiries/draft":
+                question = str(body.get("question", "")).strip()
+                answer = str(body.get("answer", "")).strip()
+                if not question or not answer:
+                    raise ValueError("문의 초안을 만들 상담 내용이 없습니다.")
+                self.respond(200, build_inquiry_draft(question, answer, body.get("evidence", [])))
+                return
+            if self.path == "/api/inquiries/send":
+                subject = str(body.get("subject", "")).strip()
+                inquiry_body = str(body.get("body", "")).strip()
+                if not subject or not inquiry_body:
+                    raise ValueError("메일 제목과 본문을 입력해 주세요.")
+                inquiry = {
+                    "id": len(INQUIRY_HISTORY) + 1,
+                    "recipient": str(body.get("recipient", "복리후생 담당 부서")),
+                    "recipient_email": str(body.get("recipient_email", "welfare-demo@example.com")),
+                    "subject": subject,
+                    "body": inquiry_body,
+                    "sent_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "status": "발송 요청 완료",
+                }
+                INQUIRY_HISTORY.append(inquiry)
+                self.respond(200, inquiry)
+                return
             question = str(body.get("question", "")).strip()
             if not question:
                 raise ValueError("질문을 입력해 주세요.")
@@ -930,6 +983,9 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         """규정 원문 링크와 기존 정적 파일을 제공합니다."""
+        if self.path == "/api/inquiries":
+            self.respond(200, {"items": INQUIRY_HISTORY})
+            return
         if self.path.startswith("/rules/"):
             requested = unquote(self.path[len("/rules/"):]).split("?", 1)[0]
             candidate = (RULES_DIR / requested).resolve()
