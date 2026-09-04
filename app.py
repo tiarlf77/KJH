@@ -929,7 +929,7 @@ def build_inquiry_draft(question, answer, evidence):
         "감사합니다.\n복리후생 상담 시스템 드림"
     )
     return {
-        "recipient": "복리후생 담당 부서",
+        "recipient": "복리후생 담당자",
         "recipient_email": "welfare-demo@example.com",
         "subject": "복리후생 지원 가능 여부 확인 요청",
         "body": body,
@@ -941,7 +941,7 @@ class Handler(SimpleHTTPRequestHandler):
     """정적 화면과 상담 요청을 함께 제공하는 간단한 HTTP 핸들러입니다."""
 
     def do_POST(self):
-        if self.path not in ("/api/chat", "/api/inquiries/draft", "/api/inquiries/send"):
+        if self.path not in ("/api/chat", "/api/inquiries/draft", "/api/inquiries/send", "/api/inquiries/save", "/api/inquiries/delete"):
             self.send_error(404)
             return
         try:
@@ -961,15 +961,35 @@ class Handler(SimpleHTTPRequestHandler):
                     raise ValueError("메일 제목과 본문을 입력해 주세요.")
                 inquiry = {
                     "id": len(INQUIRY_HISTORY) + 1,
-                    "recipient": str(body.get("recipient", "복리후생 담당 부서")),
+                    "recipient": str(body.get("recipient", "복리후생 담당자")),
                     "recipient_email": str(body.get("recipient_email", "welfare-demo@example.com")),
                     "subject": subject,
                     "body": inquiry_body,
                     "sent_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                    "status": "발송 요청 완료",
+                    "status": "메일 요청 완료",
                 }
                 INQUIRY_HISTORY.append(inquiry)
                 self.respond(200, inquiry)
+                return
+            if self.path == "/api/inquiries/save":
+                inquiry = {
+                    "id": len(INQUIRY_HISTORY) + 1,
+                    "recipient": str(body.get("recipient", "복리후생 담당자")),
+                    "recipient_email": str(body.get("recipient_email", "welfare-demo@example.com")),
+                    "subject": str(body.get("subject", "")).strip(),
+                    "body": str(body.get("body", "")).strip(),
+                    "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "status": "작성 중",
+                }
+                if not inquiry["subject"] or not inquiry["body"]:
+                    raise ValueError("메일 제목과 본문을 입력해 주세요.")
+                INQUIRY_HISTORY.append(inquiry)
+                self.respond(200, inquiry)
+                return
+            if self.path == "/api/inquiries/delete":
+                inquiry_id = int(body.get("id", 0))
+                INQUIRY_HISTORY[:] = [item for item in INQUIRY_HISTORY if item["id"] != inquiry_id]
+                self.respond(200, {"deleted": inquiry_id})
                 return
             question = str(body.get("question", "")).strip()
             if not question:
