@@ -660,9 +660,15 @@ def build_domestic_trip_answer(question):
     """국내 출장의 핵심 지급 기준은 모델 해석 없이 고정 안내합니다."""
     if not any(word in question for word in ("출장", "국내여비", "교통비", "숙박비", "식비", "현지교통비")):
         return ""
+    early_departure = any(word in question for word in ("일요일", "전일", "선출발", "미리 출발", "하루 전", "전날"))
     if any(word in question for word in ("해외", "파견", "부임")):
         return ""
-    early_departure = any(word in question for word in ("일요일", "전일", "선출발", "미리 출발", "하루 전"))
+    if early_departure and not any(word in question for word in ("국내", "해외")):
+        return (
+            "일요일에 미리 출발하는 출장의 숙박비 지급 여부는 국내출장인지 해외출장인지에 따라 기준이 다릅니다.\n\n"
+            "해외출장은 부득이하게 전일 이동해야 하는 경우 국내여비 기준에 따라 숙박비·시외교통비·1일분 소액경비를 지급한다는 규정이 있습니다.\n\n"
+            "반면 국내출장의 일요일 선출발 숙박비는 제공된 규정만으로 명확히 확인하기 어렵습니다. 출장 유형과 선출발 사유를 알려주시거나, 출장명령서와 실제 이동일을 기준으로 주관 부서에 문의해 주세요."
+        )
     monday_start = any(word in question for word in ("월요일부터", "월요일 부터", "월요일에 시작", "월요일 출장"))
     if early_departure and monday_start:
         return (
