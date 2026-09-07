@@ -18,7 +18,7 @@ RULES_DIR = BASE_DIR / "규정"
 MODEL = "gpt-5.6-luna"
 SOURCE_FILES = {
     "경조금 지급기준.md",
-    "동호회 관리 규정.txt",
+    "동호회 관리 규정.md",
     "숙소지원금 운영 기준.txt",
     "여비관리기준.txt",
 }
@@ -955,7 +955,7 @@ def apply_policy_rules_node(state: ConsultationState):
     elif parking_answer or trip_answer:
         evidence = [{"file": "여비관리기준.txt", "score": 1, "text": "여비관리기준"}]
     else:
-        evidence = [{"file": "동호회 관리 규정.txt", "score": 1, "text": "동호회 관리 규정"}]
+        evidence = [{"file": "동호회 관리 규정.md", "score": 1, "text": "동호회 관리 규정"}]
     return {"answer": answer, "evidence": evidence}
 
 
