@@ -17,7 +17,7 @@ BASE_DIR = Path(__file__).resolve().parent
 RULES_DIR = BASE_DIR / "규정"
 MODEL = "gpt-5.6-luna"
 SOURCE_FILES = {
-    "경조금 지급기준.txt",
+    "경조금 지급기준.md",
     "동호회 관리 규정.txt",
     "숙소지원금 운영 기준.txt",
     "여비관리기준.txt",
@@ -138,8 +138,36 @@ def tokens(text):
     return set(re.findall(r"[가-힣A-Za-z0-9]+", text.lower()))
 
 
+def split_policy_chunks(path):
+    """Markdown은 제목 계층을 보존하고, 일반 규정은 빈 줄 기준으로 나눕니다."""
+    text = path.read_text(encoding="utf-8")
+    if path.suffix.lower() != ".md":
+        return [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+
+    chunks = []
+    headings = []
+    current_lines = []
+    for line in text.splitlines():
+        heading = re.match(r"^(#{1,6})\s+(.+?)\s*$", line)
+        if heading:
+            if current_lines:
+                chunks.append({"heading": headings[-1] if headings else "", "text": "\n".join(current_lines).strip()})
+                current_lines = []
+            level = len(heading.group(1))
+            title = heading.group(2)
+            headings = headings[: level - 1] + [title]
+            current_lines.append(line)
+            continue
+        current_lines.append(line)
+    if current_lines:
+        chunks.append({"heading": headings[-1] if headings else "", "text": "\n".join(current_lines).strip()})
+
+    # 표·예외·증빙 목록은 제목과 본문을 함께 검색 근거로 제공합니다.
+    return [chunk["text"] for chunk in chunks if chunk["text"]]
+
+
 def retrieve(question, limit=12):
-    """네 개 원문 규정에서 질문과 관련된 문단을 찾아 근거로 반환합니다."""
+    """Markdown 제목 청크와 기존 텍스트 규정에서 관련 근거를 찾아 반환합니다."""
     query_tokens = tokens(question)
     if any(word in question for word in ("숙소", "숙소지원금", "기존 숙소", "전 근무지", "반납", "정리", "유지")):
         # 근무지 이동 관련 질문은 5.5 지원특례의 핵심 표현을 함께 검색합니다.
@@ -148,12 +176,12 @@ def retrieve(question, limit=12):
         if word in question:
             query_tokens.update(synonyms)
     results = []
-    for path in sorted(RULES_DIR.glob("*.txt")):
+    for path in sorted((*RULES_DIR.glob("*.txt"), *RULES_DIR.glob("*.md"))):
         # 공식 기준 4개 파일만 상담 근거로 사용하고 샘플 문서는 제외합니다.
         if path.name not in SOURCE_FILES:
             continue
         text = path.read_text(encoding="utf-8")
-        paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+        paragraphs = split_policy_chunks(path)
         for paragraph in paragraphs:
             paragraph_tokens = tokens(paragraph)
             score = len(query_tokens & paragraph_tokens)
@@ -916,7 +944,7 @@ def apply_policy_rules_node(state: ConsultationState):
     if not answer:
         return {}
     if marriage_answer or seungjungsang_answer or hoegap_answer or death_answer:
-        evidence = [{"file": "경조금 지급기준.txt", "score": 1, "text": "경조금 지급기준"}]
+        evidence = [{"file": "경조금 지급기준.md", "score": 1, "text": "경조금 지급기준"}]
     elif housing_exclusion_answer or housing_contract_change_answer or housing_lease_answer or housing_move_answer:
         evidence = [{"file": "숙소지원금 운영 기준.txt", "score": 1, "text": "숙소지원금 운영 기준"}]
     elif relocation_answer:
@@ -1076,7 +1104,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             content = candidate.read_bytes()
             self.send_response(200)
-            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            content_type = "text/markdown" if candidate.suffix.lower() == ".md" else "text/plain"
+            self.send_header("Content-Type", f"{content_type}; charset=utf-8")
             self.send_header("Content-Length", str(len(content)))
             self.send_header("Content-Disposition", "inline")
             self.end_headers()
