@@ -55,12 +55,14 @@
     function addError(text){chat.insertAdjacentHTML('beforeend',`<div class="message assistant"><div class="avatar">AI</div><div class="bubble"><div class="notice">⚠ ${escapeHtml(text)}</div></div></div>`)}
     function addAnswer(answer,evidence){
       const cleanAnswer=answer.replace(/(?:\*\*)?확인한 규정(?:\*\*)?[:：][\s\S]*$/i,'').trim();
-      const sources=[...new Set((evidence||[]).map(x=>x.file))];const sourceLinks=sources.length?`<div class="sources"><span>확인한 규정</span>${sources.map(file=>`<a href="/rules/${encodeURIComponent(file)}" target="_blank" rel="noopener">${escapeHtml(file.replace('.txt',''))}</a>`).join('')}</div>`:'';
+      const sources=[...new Set((evidence||[]).map(x=>x.file))];const sourceLinks=sources.length?`<div class="sources"><span>확인한 규정</span>${sources.map(file=>`<a href="/rules/${encodeURIComponent(file)}" target="_blank" rel="noopener">${escapeHtml(file.replace(/\.(txt|md)$/,''))}</a>`).join('')}</div>`:'';
       const currentQuestion=conversation.at(-1)?.content||'';
       const inquiryData=encodeURIComponent(JSON.stringify({question:currentQuestion,answer:cleanAnswer,evidence:evidence||[]}));
       const travelQuestion=/(출장|여비|기차|철도|열차|교통비|환율|외환|숙박비|부임비|이전비|교육|연수)/.test(currentQuestion);
+      const clubApplicationQuestion=/동호회/.test(currentQuestion)&&/(신청|신청서|신규|결성|등록|양식|회장|총무|계좌번호)/.test(currentQuestion);
       const quickLinks=travelQuestion?`<div class="quick-links"><div class="quick-links-title">출장 관련 바로가기</div><div class="quick-links-list"><a class="quick-link" href="https://map.naver.com/" target="_blank" rel="noopener noreferrer">⌖ 네이버지도 ↗</a><a class="quick-link" href="http://www.smbs.biz/ExRate/TodayExRate.jsp" target="_blank" rel="noopener noreferrer">▥ 서울외환중개 ↗</a><a class="quick-link" href="https://www.korail.com/ticket/search/general" target="_blank" rel="noopener noreferrer">▣ 코레일 ↗</a><a class="quick-link" href="https://www.yeogi.com/" target="_blank" rel="noopener noreferrer">▢ 여기어때 ↗</a></div></div>`:'';
-      chat.insertAdjacentHTML('beforeend',`<div class="message assistant"><div class="avatar">AI</div><div class="bubble">${escapeHtml(cleanAnswer)}${sourceLinks}${quickLinks}<br><button class="inquiry-button" data-inquiry="${inquiryData}">담당자에게 문의하기</button></div></div>`);window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
+      const clubApplicationButton=clubApplicationQuestion?`<button class="inquiry-button club-application-button">동호회 신청 메일 작성</button>`:'';
+      chat.insertAdjacentHTML('beforeend',`<div class="message assistant"><div class="avatar">AI</div><div class="bubble">${escapeHtml(cleanAnswer)}${sourceLinks}${quickLinks}<br>${clubApplicationButton}<button class="inquiry-button" data-inquiry="${inquiryData}">담당자에게 문의하기</button></div></div>`);window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
       return;
       /* 기존 브라우저 내장 답변 로직은 백엔드 LLM 답변으로 대체되었습니다. */
       /*
@@ -80,7 +82,8 @@
       return `${primary.name} 기준을 확인해 보았습니다.\n\n${facts.map(x=>'• '+x).join('\n')}\n\n질문하신 상황에 정확히 적용하려면 대상·일자·소속·직급·금액 등 추가 정보가 필요할 수 있습니다. 해당 정보가 있으면 조건을 하나씩 대조해 드리겠습니다.`;
     }
     function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
-    chat.addEventListener('click',event=>{const button=event.target.closest('.inquiry-button');if(!button)return;openInquiry(JSON.parse(decodeURIComponent(button.dataset.inquiry)))});
+    chat.addEventListener('click',event=>{const clubButton=event.target.closest('.club-application-button');if(clubButton){openClubApplicationDraft();return}const button=event.target.closest('.inquiry-button');if(!button)return;openInquiry(JSON.parse(decodeURIComponent(button.dataset.inquiry)))});
+    async function openClubApplicationDraft(){const response=await fetch('/api/club-applications/draft',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});const draft=await response.json();if(!response.ok){alert(draft.error||'동호회 신청 메일 초안을 만들지 못했습니다.');return}openInquiry(draft)}
     async function openInquiry(data){
       const draft=data.body?data:await (await fetch('/api/inquiries/draft',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})).json();
       document.body.insertAdjacentHTML('beforeend',`<div class="inquiry-panel" id="inquiry-panel"><div class="inquiry-card"><h2>담당자 문의</h2><div class="notice">현재 환경에서는 메일 발송 요청 내역만 저장됩니다.</div><label>수신 부서</label><input id="inquiry-recipient" value="${escapeHtml(draft.recipient)}"><label>메일 제목</label><input id="inquiry-subject" value="${escapeHtml(draft.subject)}"><label>메일 본문</label><textarea id="inquiry-body">${escapeHtml(draft.body)}</textarea><div class="inquiry-actions"><button class="secondary" onclick="closeInquiry()">취소</button><button class="secondary" onclick="saveInquiry()">임시 저장</button><button class="send" onclick="sendInquiry()">메일 보내기</button></div></div></div>`);

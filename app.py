@@ -778,6 +778,29 @@ def build_parking_answer(question):
     return ""
 
 
+def is_club_application_question(question):
+    """동호회 신규 신청 양식과 담당자 안내를 묻는 질문을 식별합니다."""
+    application_words = ("신청", "신청서", "신규", "결성", "등록", "양식", "회장", "총무", "계좌번호")
+    return "동호회" in question and any(word in question for word in application_words)
+
+
+def build_club_application_answer(question):
+    """동호회 신규 신청에는 운영 안내에 등록된 양식을 우선 보여줍니다."""
+    if not is_club_application_question(question):
+        return ""
+    return (
+        "동호회 신규 신청 시 아래 항목을 작성해 주세요.\n\n"
+        "확인 결과\n"
+        "- 동호회 회장 / 총무\n"
+        "- 동호회 명\n"
+        "- 종목(스포츠, 문화 등)\n"
+        "- 동호회 회칙 작성 및 게시판 등록 여부\n"
+        "- 총무 계좌번호의 동호회 시스템 입력 여부(필수)\n"
+        "- 첨부 서류: 동호인 그룹 등록 신청서, 연간 행사 계획서, 회원 명단, 동호인 그룹 원칙\n\n"
+        "신청 후에는 노사발전그룹 동호회 담당자에게 신청 사실을 메일로 알려야 합니다. 아래 ‘동호회 신청 메일 작성’ 버튼을 누르면 수정 가능한 메일 초안을 만들 수 있습니다."
+    )
+
+
 def build_club_answer(question):
     """동호회 개설·가입·정기지원 문의에 공통 기준을 적용합니다."""
     if "동호회" not in question:
@@ -939,8 +962,9 @@ def apply_policy_rules_node(state: ConsultationState):
     relocation_answer = build_relocation_answer(question)
     trip_answer = build_domestic_trip_answer(question)
     parking_answer = build_parking_answer(question)
+    club_application_answer = build_club_application_answer(question)
     club_answer = build_club_answer(question)
-    answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or housing_exclusion_answer or housing_contract_change_answer or housing_move_answer or housing_lease_answer or relocation_answer or parking_answer or trip_answer or club_answer
+    answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or housing_exclusion_answer or housing_contract_change_answer or housing_move_answer or housing_lease_answer or relocation_answer or parking_answer or trip_answer or club_application_answer or club_answer
     if not answer:
         return {}
     if marriage_answer or seungjungsang_answer or hoegap_answer or death_answer:
@@ -1027,16 +1051,48 @@ def build_inquiry_draft(question, answer, evidence):
     }
 
 
+def build_club_application_draft():
+    """동호회 신규 신청에 필요한 정보를 채울 수 있는 담당자 메일 초안을 만듭니다."""
+    body = (
+        "안녕하세요. 노사발전그룹 동호회 담당자님,\n\n"
+        "아래와 같이 동호회 등록을 신청합니다.\n\n"
+        "- 동호회 회장: [입력]\n"
+        "- 동호회 총무: [입력]\n"
+        "- 동호회 명: [입력]\n"
+        "- 종목(스포츠, 문화 등): [입력]\n"
+        "- 동호회 회칙 작성 및 게시판 등록: [완료 / 미완료]\n"
+        "- 총무 계좌번호 동호회 시스템 입력: [완료 / 미완료]\n"
+        "- 비고: [입력]\n\n"
+        "[첨부 예정 서류]\n"
+        "1. 동호인 그룹 등록 신청서\n"
+        "2. 연간 행사 계획서\n"
+        "3. 동호인 그룹 회원 명단\n"
+        "4. 동호인 그룹 원칙\n\n"
+        "신청 내용을 확인해 주시고, 등록 절차 및 추가 제출자료가 있으면 안내 부탁드립니다.\n\n"
+        "감사합니다.\n[신청자명] 드림"
+    )
+    return {
+        "recipient": "노사발전그룹 동호회 담당자",
+        "recipient_email": "",
+        "subject": "[동호회 신청] [동호회명] 등록 신청",
+        "body": body,
+        "evidence": [{"file": "동호회 관리 규정.md", "score": 1, "text": "동호회 신청 양식 및 담당자 안내"}],
+    }
+
+
 class Handler(SimpleHTTPRequestHandler):
     """정적 화면과 상담 요청을 함께 제공하는 간단한 HTTP 핸들러입니다."""
 
     def do_POST(self):
-        if self.path not in ("/api/chat", "/api/inquiries/draft", "/api/inquiries/send", "/api/inquiries/save", "/api/inquiries/delete"):
+        if self.path not in ("/api/chat", "/api/inquiries/draft", "/api/club-applications/draft", "/api/inquiries/send", "/api/inquiries/save", "/api/inquiries/delete"):
             self.send_error(404)
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
             body = json.loads(self.rfile.read(length).decode("utf-8"))
+            if self.path == "/api/club-applications/draft":
+                self.respond(200, build_club_application_draft())
+                return
             if self.path == "/api/inquiries/draft":
                 question = str(body.get("question", "")).strip()
                 answer = str(body.get("answer", "")).strip()
