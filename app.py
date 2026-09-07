@@ -22,6 +22,8 @@ SOURCE_FILES = {
     "숙소지원금 운영 기준.txt",
     "여비관리기준.txt",
 }
+# 규정의 '회갑'과 사용자가 자주 쓰는 '환갑'을 같은 의미로 처리합니다.
+HOEGAP_TERMS = ("회갑", "환갑")
 QUERY_SYNONYMS = {
     "동생": {"형제", "자매", "형제자매"},
     "형": {"형제", "형제자매"},
@@ -222,7 +224,7 @@ def date_deadline_context(question):
 
 def birthday_context(question):
     """회갑 질문의 생년월일을 계산해 모델이 연령을 추측하지 않게 합니다."""
-    if "회갑" not in question:
+    if not any(term in question for term in HOEGAP_TERMS):
         return ""
     birth = extract_birth_date(question)
     if not birth:
@@ -261,7 +263,7 @@ def conversation_context(question, history):
         relation = "질문 대상은 배우자의 부모로 해석한다."
     birth = extract_birth_date(question + " " + prior_text)
     birthday = ""
-    if birth and ("회갑" in question or "회갑" in prior_text):
+    if birth and (any(term in question for term in HOEGAP_TERMS) or any(term in prior_text for term in HOEGAP_TERMS)):
         birthday = birthday_context(f"회갑 {birth.strftime('%Y%m%d')}")
     if not relation and not birthday:
         return ""
@@ -287,12 +289,35 @@ def build_hoegap_answer(question, history):
     birth = current_birth or extract_birth_date(prior_text)
     # 이전 회갑 대화는 생년월일·부모 관계처럼 명확한 후속 입력일 때만 이어받습니다.
     is_hoegap = (
-        "회갑" in question
+        any(term in question for term in HOEGAP_TERMS)
         or ("경조금" in question and current_relation and current_birth)
-        or ("회갑" in prior_text and (current_relation or current_birth))
+        or (any(term in prior_text for term in HOEGAP_TERMS) and (current_relation or current_birth))
     )
-    if not relation or not birth or not is_hoegap:
+    if not is_hoegap:
         return ""
+    # '올해 환갑 몇 년생'처럼 일반 기준을 묻는 질문은 관계·개인 생년월일 없이 바로 답합니다.
+    if not birth and (
+        any(word in question for word in ("몇년생", "몇 년생", "생년", "대상"))
+        or ("올해" in question and any(term in question for term in HOEGAP_TERMS))
+    ):
+        return (
+            f"{date.today().year}년 기준 환갑 대상은 원칙적으로 {date.today().year - 60}년생입니다. "
+            "정확한 판단은 생일이 지났는지와 대상이 본인 부모 또는 배우자 부모인지 함께 확인해야 합니다.\n\n"
+            "경조금은 만 60세가 되는 날부터 3개월 이내 신청할 수 있으며, 지원금은 200,000원입니다."
+        )
+    if not relation or not birth:
+        missing = []
+        if not relation:
+            missing.append("대상 관계(본인 부모인지 배우자 부모인지)")
+        if not birth:
+            missing.append("부모님의 생년월일(YYYYMMDD)")
+        return (
+            "환갑(회갑) 경조금 기준은 본인 및 배우자 부모가 만 60세가 되는 경우이며, 지원금은 200,000원입니다.\n\n"
+            "정확한 올해 대상 여부를 계산하려면 "
+            + ", ".join(missing)
+            + "을 알려주세요.\n"
+            "신청은 환갑 사유 발생일로부터 3개월 이내 가능합니다."
+        )
     today = date.today()
     sixtieth = date(birth.year + 60, birth.month, birth.day)
     deadline = add_months(sixtieth, 3)
@@ -457,13 +482,13 @@ def build_death_answer(question):
 def starts_new_policy_topic(question):
     """이전 대화와 분리해야 하는 새 복리후생 질문인지 판단합니다."""
     topic_words = ("결혼", "사망", "출산", "동호회", "숙소", "출장", "여비", "부임", "발령", "이사", "부임비", "이전비", "건강검진")
-    return any(word in question for word in topic_words) and "회갑" not in question
+    return any(word in question for word in topic_words) and not any(term in question for term in HOEGAP_TERMS)
 
 
 def build_clarification_answer(question):
     """제도 유형을 알 수 없는 질문에 전체 상담 범위와 재질문 형식을 안내합니다."""
     topics = (
-        "출장", "파견", "부임", "경조", "결혼", "회갑", "출산", "사망", "돌아가", "별세", "승중상",
+        "출장", "파견", "부임", "경조", "결혼", "회갑", "환갑", "출산", "사망", "돌아가", "별세", "승중상",
         "숙소", "동호회", "발령", "이사", "부임비", "이전비", "전세", "월세", "임대차", "건물", "명의", "동거",
         "백숙부", "매형", "매제", "제부", "형부", "올케",
     )
@@ -805,7 +830,7 @@ def call_openai(question, evidence, history=None):
         if item.get("role") in ("user", "assistant") and item.get("content"):
             conversation.append({"role": item["role"], "content": item["content"]})
     prior_text = " ".join(item.get("content", "") for item in (history or [])[-4:])
-    birthday_question = question if "회갑" in question else (f"회갑 {question}" if "회갑" in prior_text else question)
+    birthday_question = question if any(term in question for term in HOEGAP_TERMS) else (f"회갑 {question}" if any(term in prior_text for term in HOEGAP_TERMS) else question)
     conversation.append({"role": "user", "content": f"{question}{date_deadline_context(question)}{birthday_context(birthday_question)}{conversation_context(question, history)}\n\n검색된 규정 근거:\n{evidence_text}"})
     payload = {
         "model": MODEL,
@@ -845,13 +870,18 @@ class ConsultationState(TypedDict, total=False):
 def classify_question_node(state: ConsultationState):
     """질문을 분류해 불명확 안내와 규정 검색의 흐름을 나눕니다."""
     question = state["question"]
+    prior_text = " ".join(item.get("content", "") for item in state.get("history", [])[-6:])
+    # 직전 질문이 환갑이고 현재 입력이 생년월일이면, 숫자만 입력해도 같은 상담을 이어갑니다.
+    is_hoegap_followup = any(term in prior_text for term in HOEGAP_TERMS) and extract_birth_date(question)
     if build_clarification_answer(question):
+        if is_hoegap_followup:
+            return {"intent": "ceremony"}
         return {"intent": "clarification"}
     if is_relocation_question(question):
         return {"intent": "relocation"}
     if "숙소" in question or "숙소지원금" in question:
         return {"intent": "housing"}
-    if any(word in question for word in ("결혼", "회갑", "출산", "사망", "돌아가", "별세", "승중상")):
+    if any(word in question for word in ("결혼", "회갑", "환갑", "출산", "사망", "돌아가", "별세", "승중상")):
         return {"intent": "ceremony"}
     return {"intent": "policy"}
 
