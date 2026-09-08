@@ -24,6 +24,8 @@ SOURCE_FILES = {
 }
 # 규정의 '회갑'과 사용자가 자주 쓰는 '환갑'을 같은 의미로 처리합니다.
 HOEGAP_TERMS = ("회갑", "환갑")
+# 조사나 어미가 붙어도 규정의 핵심어로 검색해야 하는 표현입니다.
+CANONICAL_QUERY_TERMS = ("결혼",)
 QUERY_SYNONYMS = {
     "동생": {"형제", "자매", "형제자매"},
     "형": {"형제", "형제자매"},
@@ -169,6 +171,9 @@ def split_policy_chunks(path):
 def retrieve(question, limit=12):
     """Markdown 제목 청크와 기존 텍스트 규정에서 관련 근거를 찾아 반환합니다."""
     query_tokens = tokens(question)
+    for term in CANONICAL_QUERY_TERMS:
+        if term in question:
+            query_tokens.add(term)
     if any(word in question for word in ("숙소", "숙소지원금", "기존 숙소", "전 근무지", "반납", "정리", "유지")):
         # 근무지 이동 관련 질문은 5.5 지원특례의 핵심 표현을 함께 검색합니다.
         query_tokens.update({"전근무지", "숙소정리", "3개월", "최장", "6개월", "처분", "발령"})
@@ -190,6 +195,11 @@ def retrieve(question, limit=12):
     results.sort(key=lambda item: item["score"], reverse=True)
     if not results:
         return []
+    # 결혼 문의는 일반적인 '지원' 표현 때문에 다른 복리후생 규정이 섞이지 않게 합니다.
+    if "결혼" in question:
+        results = [item for item in results if item["file"] == "경조금 지급기준.md"]
+        if not results:
+            return []
     # 숙소지원금 질문에는 출장·여비 규정이 섞이지 않도록 전용 기준만 사용합니다.
     if any(word in question for word in ("숙소", "숙소지원금", "주거", "월세", "전세")):
         results = [item for item in results if item["file"] == "숙소지원금 운영 기준.txt"]
