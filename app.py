@@ -25,7 +25,7 @@ SOURCE_FILES = {
 # 규정의 '회갑'과 사용자가 자주 쓰는 '환갑'을 같은 의미로 처리합니다.
 HOEGAP_TERMS = ("회갑", "환갑")
 # 조사나 어미가 붙어도 규정의 핵심어로 검색해야 하는 표현입니다.
-CANONICAL_QUERY_TERMS = ("결혼",)
+CANONICAL_QUERY_TERMS = ("결혼", "해외출장")
 QUERY_SYNONYMS = {
     "동생": {"형제", "자매", "형제자매"},
     "형": {"형제", "형제자매"},
@@ -719,9 +719,34 @@ def build_relocation_answer(question):
     )
 
 
+def build_overseas_personal_return_answer(question):
+    """해외출장 후 개인휴가를 붙인 귀국 항공편은 예외사항으로 안내합니다."""
+    compact_question = question.replace(" ", "")
+    is_overseas_trip = "해외출장" in compact_question
+    has_personal_leave = any(word in question for word in ("개인휴가", "개인 휴가", "개인 일정", "연차", "휴가"))
+    is_delayed_return = any(word in question for word in ("복귀", "귀국", "입국", "돌아오", "돌아가", "들어오", "와도"))
+    asks_airfare = any(word in question for word in ("항공", "비행기", "항공권", "항공편", "교통비", "티켓"))
+    if not (is_overseas_trip and has_personal_leave and is_delayed_return and asks_airfare):
+        return ""
+    return (
+        "해외출장 종료 후 개인휴가를 사용하고 귀국하는 항공편의 지원 여부는 "
+        "현재 제공된 여비관리기준만으로 확정하기 어렵습니다.\n\n"
+        "확인 결과\n"
+        "- 일반 기준: 해외출장 교통비는 항공임 지급이 원칙\n"
+        "- 출장 종료 후 기간: 개인휴가\n"
+        "- 개인휴가 추가 비용: 숙박비·소액경비 및 항공권 변경 수수료는 제공된 규정상 지원 근거 확인 불가\n"
+        "- 통상 귀국 항공료: 원래 출장 일정에도 발생했을 비용의 인정 범위 확인 필요\n"
+        "- 판정: 예외사항으로 출장 승인권자 및 노무관리 주관부서 확인 필요\n\n"
+        "기존 귀국 항공권, 변경 항공권, 개인휴가 기간, 변경 수수료 및 운임 차액을 제출해 주세요. "
+        "최종 지급 여부는 담당 부서의 승인과 증빙 검토를 거쳐 결정됩니다."
+    )
+
+
 def build_domestic_trip_answer(question):
     """국내 출장의 핵심 지급 기준은 모델 해석 없이 고정 안내합니다."""
     if not any(word in question for word in ("출장", "국내여비", "교통비", "숙박비", "식비", "현지교통비")):
+        return ""
+    if any(word in question for word in ("해외", "파견", "부임")):
         return ""
     is_weekend = any(word in question for word in ("토요일", "일요일", "주말", "휴일"))
     is_return = any(word in question for word in ("복귀", "귀임", "돌아오", "돌아가"))
@@ -755,8 +780,6 @@ def build_domestic_trip_answer(question):
             "담당 부서의 승인과 증빙 검토를 거쳐 결정됩니다."
         )
     early_departure = any(word in question for word in ("일요일", "전일", "선출발", "미리 출발", "하루 전", "전날"))
-    if any(word in question for word in ("해외", "파견", "부임")):
-        return ""
     if early_departure and not any(word in question for word in ("국내", "해외")):
         return (
             "일요일에 미리 출발하는 출장의 숙박비 지급 여부는 국내출장인지 해외출장인지에 따라 기준이 다릅니다.\n\n"
@@ -1001,11 +1024,12 @@ def apply_policy_rules_node(state: ConsultationState):
     housing_contract_change_answer = build_housing_contract_change_answer(question)
     housing_move_answer = build_housing_move_answer(question)
     relocation_answer = build_relocation_answer(question)
+    overseas_personal_return_answer = build_overseas_personal_return_answer(question)
     trip_answer = build_domestic_trip_answer(question)
     parking_answer = build_parking_answer(question)
     club_application_answer = build_club_application_answer(question)
     club_answer = build_club_answer(question)
-    answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or housing_exclusion_answer or housing_contract_change_answer or housing_move_answer or housing_lease_answer or relocation_answer or parking_answer or trip_answer or club_application_answer or club_answer
+    answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or housing_exclusion_answer or housing_contract_change_answer or housing_move_answer or housing_lease_answer or relocation_answer or overseas_personal_return_answer or parking_answer or trip_answer or club_application_answer or club_answer
     if not answer:
         return {}
     if marriage_answer or seungjungsang_answer or hoegap_answer or death_answer:
@@ -1017,7 +1041,7 @@ def apply_policy_rules_node(state: ConsultationState):
             {"file": "숙소지원금 운영 기준.txt", "score": 1, "text": "숙소지원금 운영 기준"},
             {"file": "여비관리기준.txt", "score": 1, "text": "여비관리기준"},
         ]
-    elif parking_answer or trip_answer:
+    elif overseas_personal_return_answer or parking_answer or trip_answer:
         evidence = [{"file": "여비관리기준.txt", "score": 1, "text": "여비관리기준"}]
     else:
         evidence = [{"file": "동호회 관리 규정.md", "score": 1, "text": "동호회 관리 규정"}]
