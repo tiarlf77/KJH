@@ -723,11 +723,25 @@ def build_domestic_trip_answer(question):
     """국내 출장의 핵심 지급 기준은 모델 해석 없이 고정 안내합니다."""
     if not any(word in question for word in ("출장", "국내여비", "교통비", "숙박비", "식비", "현지교통비")):
         return ""
-    weekend_return = (
-        any(word in question for word in ("토요일", "일요일", "주말", "휴일"))
-        and any(word in question for word in ("복귀", "귀임", "돌아오", "돌아가"))
+    is_weekend = any(word in question for word in ("토요일", "일요일", "주말", "휴일"))
+    is_return = any(word in question for word in ("복귀", "귀임", "돌아오", "돌아가"))
+    is_personal_reason = any(word in question for word in ("개인", "사적", "볼일", "볼 일", "개인 일정", "개인 용무"))
+    is_early_travel = any(
+        word in question for word in ("미리", "선출발", "조기 이동", "먼저 출발", "올라가", "내려가")
     )
-    if weekend_return:
+    if is_weekend and is_personal_reason and is_early_travel and not is_return:
+        return (
+            "개인 사유로 출장 전에 주말에 이동하는 경우에는 교통비 지급 대상으로 단정할 수 없습니다.\n\n"
+            "확인 결과\n"
+            "- 출장 일정: 회사가 승인한 출장명령서의 시작일 확인 필요\n"
+            "- 조기 이동 사유: 개인 일정\n"
+            "- 추가 비용: 개인 일정으로 인해 추가된 비용은 지원 근거가 없습니다.\n"
+            "- 통상 교통비: 정상 출장 일정에도 발생할 비용의 인정 여부는 별도 확인 필요\n"
+            "- 판정: 예외사항으로 주관 부서 확인 필요\n\n"
+            "주말 이동이 출장명령에 포함되어 있는지 확인한 뒤 소속 부서장 또는 노무관리 주관부서에 "
+            "문의해 주세요. 최종 지급 여부는 담당 부서의 승인과 증빙 검토를 거쳐 결정됩니다."
+        )
+    if is_weekend and is_return:
         return (
             "주말 복귀 교통비의 지급 여부는 현재 제공된 여비관리기준만으로 확정하기 어렵습니다.\n\n"
             "확인 결과\n"
