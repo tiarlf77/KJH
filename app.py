@@ -723,6 +723,23 @@ def build_domestic_trip_answer(question):
     """국내 출장의 핵심 지급 기준은 모델 해석 없이 고정 안내합니다."""
     if not any(word in question for word in ("출장", "국내여비", "교통비", "숙박비", "식비", "현지교통비")):
         return ""
+    weekend_return = (
+        any(word in question for word in ("토요일", "일요일", "주말", "휴일"))
+        and any(word in question for word in ("복귀", "귀임", "돌아오", "돌아가"))
+    )
+    if weekend_return:
+        return (
+            "주말 복귀 교통비의 지급 여부는 현재 제공된 여비관리기준만으로 확정하기 어렵습니다.\n\n"
+            "확인 결과\n"
+            "- 일반 기준: 승인된 국내 출장의 교통비는 실비로 사후 정산\n"
+            "- 확인 필요: 주말 이동이 출장명령 또는 업무상 필요에 따른 승인 일정인지 여부\n"
+            "- 추가 확인: 개인 사유로 복귀를 연기했는지 여부\n"
+            "- 근태 연계: 주말 복귀 일정의 근태 인정 기준 확인 필요\n"
+            "- 판정: 예외사항으로 주관 부서 확인 필요\n\n"
+            "출장명령서, 실제 출장 일정 및 주말 복귀 사유를 확인한 뒤 소속 부서장 또는 "
+            "노무관리 주관부서에 문의해 주세요. 최종 근태 인정 및 교통비 지급 여부는 "
+            "담당 부서의 승인과 증빙 검토를 거쳐 결정됩니다."
+        )
     early_departure = any(word in question for word in ("일요일", "전일", "선출발", "미리 출발", "하루 전", "전날"))
     if any(word in question for word in ("해외", "파견", "부임")):
         return ""
