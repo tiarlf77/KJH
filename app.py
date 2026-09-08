@@ -20,6 +20,7 @@ SOURCE_FILES = {
     "경조금 지급기준.md",
     "동호회 관리 규정.md",
     "숙소지원금 운영 기준.txt",
+    "여비관리 FAQ.md",
     "여비관리기준.txt",
 }
 # 규정의 '회갑'과 사용자가 자주 쓰는 '환갑'을 같은 의미로 처리합니다.
@@ -171,8 +172,9 @@ def split_policy_chunks(path):
 def retrieve(question, limit=12):
     """Markdown 제목 청크와 기존 텍스트 규정에서 관련 근거를 찾아 반환합니다."""
     query_tokens = tokens(question)
+    compact_question = question.replace(" ", "")
     for term in CANONICAL_QUERY_TERMS:
-        if term in question:
+        if term in compact_question:
             query_tokens.add(term)
     if any(word in question for word in ("숙소", "숙소지원금", "기존 숙소", "전 근무지", "반납", "정리", "유지")):
         # 근무지 이동 관련 질문은 5.5 지원특례의 핵심 표현을 함께 검색합니다.
@@ -182,8 +184,12 @@ def retrieve(question, limit=12):
             query_tokens.update(synonyms)
     results = []
     for path in sorted((*RULES_DIR.glob("*.txt"), *RULES_DIR.glob("*.md"))):
-        # 공식 기준 4개 파일만 상담 근거로 사용하고 샘플 문서는 제외합니다.
+        # 상담 근거로 승인된 파일만 사용하고 샘플 문서는 제외합니다.
         if path.name not in SOURCE_FILES:
+            continue
+        if path.name == "여비관리 FAQ.md" and not any(
+            word in question for word in ("개인휴가", "개인 휴가", "개인 일정", "연차", "휴가")
+        ):
             continue
         text = path.read_text(encoding="utf-8")
         paragraphs = split_policy_chunks(path)
@@ -720,7 +726,7 @@ def build_relocation_answer(question):
 
 
 def build_overseas_personal_return_answer(question):
-    """해외출장 후 개인휴가를 붙인 귀국 항공편은 예외사항으로 안내합니다."""
+    """해외출장 후 개인 일정에 따른 귀국 항공편은 지급 불가로 안내합니다."""
     compact_question = question.replace(" ", "")
     is_overseas_trip = "해외출장" in compact_question
     has_personal_leave = any(word in question for word in ("개인휴가", "개인 휴가", "개인 일정", "연차", "휴가"))
@@ -729,16 +735,17 @@ def build_overseas_personal_return_answer(question):
     if not (is_overseas_trip and has_personal_leave and is_delayed_return and asks_airfare):
         return ""
     return (
-        "해외출장 종료 후 개인휴가를 사용하고 귀국하는 항공편의 지원 여부는 "
-        "현재 제공된 여비관리기준만으로 확정하기 어렵습니다.\n\n"
+        "개인 연차나 휴가를 사용하여 해외출장 일정 종료 후 체류한 뒤 귀국하는 항공편은 "
+        "회사에서 지원하지 않습니다.\n\n"
         "확인 결과\n"
-        "- 일반 기준: 해외출장 교통비는 항공임 지급이 원칙\n"
-        "- 출장 종료 후 기간: 개인휴가\n"
-        "- 개인휴가 추가 비용: 숙박비·소액경비 및 항공권 변경 수수료는 제공된 규정상 지원 근거 확인 불가\n"
-        "- 통상 귀국 항공료: 원래 출장 일정에도 발생했을 비용의 인정 범위 확인 필요\n"
-        "- 판정: 예외사항으로 출장 승인권자 및 노무관리 주관부서 확인 필요\n\n"
-        "기존 귀국 항공권, 변경 항공권, 개인휴가 기간, 변경 수수료 및 운임 차액을 제출해 주세요. "
-        "최종 지급 여부는 담당 부서의 승인과 증빙 검토를 거쳐 결정됩니다."
+        "- 복귀 원칙: 회사가 승인한 해외출장 일정 내 귀국\n"
+        "- 출장 종료 후 체류: 개인 연차·휴가 또는 개인 여행\n"
+        "- 항공편: 개인 일정으로 변경된 귀국 항공편은 지원하지 않음\n"
+        "- 개인 부담: 귀국 항공료, 운임 차액 및 변경 수수료\n"
+        "- 근태: 개인 연차·휴가와 추가 체류 기간은 별도 근태 승인 필요\n"
+        "- 판정: 지급 불가\n\n"
+        "승인된 해외출장 일정 내 귀국 항공편을 이용해 주세요. 업무상 사유로 귀국 일정 변경이 "
+        "필요한 경우에만 변경 전에 출장 승인권자와 노무관리 주관부서의 승인을 받아야 합니다."
     )
 
 
@@ -1041,7 +1048,9 @@ def apply_policy_rules_node(state: ConsultationState):
             {"file": "숙소지원금 운영 기준.txt", "score": 1, "text": "숙소지원금 운영 기준"},
             {"file": "여비관리기준.txt", "score": 1, "text": "여비관리기준"},
         ]
-    elif overseas_personal_return_answer or parking_answer or trip_answer:
+    elif overseas_personal_return_answer:
+        evidence = [{"file": "여비관리 FAQ.md", "score": 1, "text": "해외출장 종료 후 개인 일정 체류"}]
+    elif parking_answer or trip_answer:
         evidence = [{"file": "여비관리기준.txt", "score": 1, "text": "여비관리기준"}]
     else:
         evidence = [{"file": "동호회 관리 규정.md", "score": 1, "text": "동호회 관리 규정"}]
