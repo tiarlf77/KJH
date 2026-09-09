@@ -1,3 +1,4 @@
+import hashlib
 import json
 import math
 import os
@@ -139,14 +140,35 @@ def load_env():
         os.environ.setdefault(key.strip(), value.strip().strip('"\''))
 
 
+# 조사가 붙으면 "회사"와 "회사가"가 다른 토큰이 되어 흔한 단어가 희귀어로 잘못 계산됩니다.
+PARTICLES = (
+    "에서는", "에게는", "으로는", "이라도", "에서", "에게", "으로", "까지", "부터", "보다",
+    "처럼", "마다", "조차", "밖에", "이나", "라도", "은", "는", "이", "가", "을", "를",
+    "의", "에", "도", "만", "과", "와", "로", "나",
+)
+
+
+def strip_particle(word):
+    """세 글자 이상 한글 어절에서 흔한 조사를 떼어 표제어에 가깝게 만듭니다."""
+    if not re.fullmatch(r"[가-힣]+", word):
+        return word
+    for particle in PARTICLES:
+        if len(word) - len(particle) >= 2 and word.endswith(particle):
+            return word[: -len(particle)]
+    return word
+
+
 def tokens(text):
-    """한글은 어절과 음절 2-gram으로, 영문·숫자는 어절 단위로 검색 토큰을 만듭니다."""
+    """한글·영문·숫자 어절에서 조사를 떼어 검색 토큰을 만듭니다."""
+    return {strip_particle(word) for word in re.findall(r"[가-힣A-Za-z0-9]+", text.lower())}
+
+
+def bigrams(text):
+    """한글 어절을 음절 2-gram으로 쪼갭니다."""
     # 조사·어미가 붙으면 어절이 달라지므로("해체하려면" vs "해체") 2-gram으로 겹치게 합니다.
-    words = re.findall(r"[가-힣A-Za-z0-9]+", text.lower())
-    result = set(words)
-    for word in words:
-        if len(word) > 1 and re.fullmatch(r"[가-힣]+", word):
-            result.update(word[index:index + 2] for index in range(len(word) - 1))
+    result = set()
+    for word in re.findall(r"[가-힣]{2,}", text.lower()):
+        result.update(word[index:index + 2] for index in range(len(word) - 1))
     return result
 
 
@@ -185,6 +207,8 @@ def split_policy_chunks(path) -> list[dict]:
 
 BM25_K1 = 1.5
 BM25_B = 0.75
+# 2-gram 가중치. 평가셋에서 1.0이 상위 3건 정확도가 가장 높아 어절과 같은 무게로 둡니다.
+BIGRAM_WEIGHT = 1.0
 # 최고 점수 파일 대비 이 비율 이상인 규정만 함께 근거로 사용합니다.
 TOP_FILE_SCORE_RATIO = 0.6
 
@@ -199,32 +223,95 @@ def load_policy_index():
         if path.name not in SOURCE_FILES:
             continue
         for chunk in split_policy_chunks(path):
+            searchable = f"{chunk['path']}\n{chunk['text']}"
             chunks.append({
                 "file": path.name,
                 "stem": path.stem,
                 "path": chunk["path"],
                 "text": chunk["text"],
-                "tokens": tokens(chunk["path"]) | tokens(chunk["text"]),
+                "tokens": tokens(searchable),
+                "bigrams": bigrams(searchable),
             })
     total = len(chunks)
-    frequency = Counter(token for chunk in chunks for token in chunk["tokens"])
+    frequency = Counter(token for chunk in chunks for token in chunk["tokens"] | chunk["bigrams"])
     # 흔한 단어(출장·지원)는 낮게, 희귀어(택시·해체)는 높게 가중합니다.
     idf = {
         token: math.log(1 + (total - count + 0.5) / (count + 0.5))
         for token, count in frequency.items()
     }
     average_length = sum(len(chunk["tokens"]) for chunk in chunks) / total if total else 1.0
+    # 본문만 임베딩합니다. 계층 경로는 키워드 검색에서만 사용합니다.
+    embeddings = embed_texts([chunk["text"] for chunk in chunks])
+    for chunk in chunks:
+        chunk["vector"] = embeddings.get(hashlib.sha256(chunk["text"].encode("utf-8")).hexdigest())
     return chunks, idf, average_length
 
 
-def score_chunk(query_tokens, chunk, idf, average_length):
+def score_chunk(query_tokens, query_bigrams, chunk, idf, average_length):
     """희귀어 가중과 길이 정규화를 적용한 BM25 점수를 계산합니다."""
     matched = query_tokens & chunk["tokens"]
-    if not matched:
+    # 2-gram은 조사·어미를 넘기 위한 보조 신호라 어절 일치보다 낮게 봅니다.
+    matched_bigrams = (query_bigrams & chunk["bigrams"]) - matched
+    if not matched and not matched_bigrams:
         return 0.0
+    weight = sum(idf.get(token, 0.0) for token in matched)
+    weight += BIGRAM_WEIGHT * sum(idf.get(token, 0.0) for token in matched_bigrams)
     length_ratio = len(chunk["tokens"]) / average_length if average_length else 1.0
     normalizer = BM25_K1 * (1 - BM25_B + BM25_B * length_ratio) + 1
-    return sum(idf.get(token, 0.0) for token in matched) * (BM25_K1 + 1) / normalizer
+    return weight * (BM25_K1 + 1) / normalizer
+
+
+EMBEDDING_MODEL = "text-embedding-3-small"
+EMBEDDING_CACHE_PATH = BASE_DIR / ".embedding_cache.json"
+# 조사·어미 변형은 2-gram이, 동의어·패러프레이즈는 임베딩이 잡습니다.
+VECTOR_WEIGHT = 0.5
+
+
+def request_embeddings(texts):
+    """임베딩 API를 호출합니다. 키가 없거나 실패하면 빈 리스트를 반환합니다."""
+    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        return []
+    vectors = []
+    for start in range(0, len(texts), 64):
+        batch = texts[start:start + 64]
+        request = Request(
+            "https://api.openai.com/v1/embeddings",
+            data=json.dumps({"model": EMBEDDING_MODEL, "input": batch}).encode("utf-8"),
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        )
+        try:
+            with urlopen(request, timeout=45) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except (HTTPError, URLError, TimeoutError, OSError):
+            # 임베딩이 실패하면 키워드 검색만으로 동작하도록 비워서 돌려줍니다.
+            return []
+        vectors.extend(item["embedding"] for item in payload["data"])
+    return vectors
+
+
+def embed_texts(texts):
+    """텍스트별 임베딩을 파일 캐시와 함께 반환합니다."""
+    cache = {}
+    if EMBEDDING_CACHE_PATH.exists():
+        cache = json.loads(EMBEDDING_CACHE_PATH.read_text(encoding="utf-8"))
+    keys = [hashlib.sha256(text.encode("utf-8")).hexdigest() for text in texts]
+    missing = [text for text, key in zip(texts, keys) if key not in cache]
+    if missing:
+        fresh = request_embeddings(missing)
+        if not fresh:
+            return {}
+        for text, vector in zip(missing, fresh):
+            cache[hashlib.sha256(text.encode("utf-8")).hexdigest()] = vector
+        EMBEDDING_CACHE_PATH.write_text(json.dumps(cache), encoding="utf-8")
+    return {key: cache[key] for key in keys if key in cache}
+
+
+def cosine(left, right):
+    """두 벡터의 코사인 유사도를 계산합니다."""
+    dot = sum(a * b for a, b in zip(left, right))
+    size = math.sqrt(sum(a * a for a in left)) * math.sqrt(sum(b * b for b in right))
+    return dot / size if size else 0.0
 
 
 def retrieve(question, limit=12):
@@ -240,21 +327,41 @@ def retrieve(question, limit=12):
     for word, synonyms in QUERY_SYNONYMS.items():
         if word in question:
             query_tokens.update(synonyms)
+    query_bigrams = bigrams(question)
     chunks, idf, average_length = load_policy_index()
-    results = []
+    question_vectors = embed_texts([question])
+    query_vector = next(iter(question_vectors.values()), None)
+    scored = []
     for chunk in chunks:
         if chunk["stem"] == "여비관리 FAQ" and not any(
             word in question for word in ("개인휴가", "개인 휴가", "개인 일정", "연차", "휴가")
         ):
             continue
-        score = score_chunk(query_tokens, chunk, idf, average_length)
-        if score:
-            results.append({
-                "file": chunk["file"],
-                "score": round(score, 3),
-                "path": chunk["path"],
-                "text": chunk["text"][:3000],
-            })
+        keyword_score = score_chunk(query_tokens, query_bigrams, chunk, idf, average_length)
+        vector_score = 0.0
+        if query_vector and chunk.get("vector"):
+            vector_score = cosine(query_vector, chunk["vector"])
+        if keyword_score or vector_score:
+            scored.append((chunk, keyword_score, vector_score))
+    if not scored:
+        return []
+    top_keyword = max(item[1] for item in scored) or 1.0
+    top_vector = max(item[2] for item in scored) or 1.0
+    results = []
+    for chunk, keyword_score, vector_score in scored:
+        # 임베딩을 못 쓰면 키워드 점수만으로 순위를 정합니다.
+        if query_vector:
+            fused = (1 - VECTOR_WEIGHT) * (keyword_score / top_keyword) + VECTOR_WEIGHT * (vector_score / top_vector)
+        else:
+            fused = keyword_score / top_keyword
+        results.append({
+            "file": chunk["file"],
+            "score": round(fused, 3),
+            "keyword_score": round(keyword_score, 3),
+            "vector_score": round(vector_score, 3),
+            "path": chunk["path"],
+            "text": chunk["text"][:3000],
+        })
     results.sort(key=lambda item: item["score"], reverse=True)
     if not results:
         return []
