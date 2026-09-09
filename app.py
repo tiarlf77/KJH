@@ -1010,6 +1010,9 @@ def call_openai(question, evidence, history=None):
     return "\n".join(parts).strip() or "응답 내용을 확인하지 못했습니다."
 
 
+POLICY_INTENTS = ("ceremony", "housing", "relocation", "trip", "club", "other")
+
+
 GROUNDEDNESS_INSTRUCTIONS = (
     "너는 사내 복리후생 규정 상담의 근거 판정기다. 사용자 질문과 검색된 규정 근거를 읽고, "
     "그 근거만으로 질문에 답할 수 있는지 판정한다. 답을 작성하지 말고 판정만 한다.\n"
@@ -1022,8 +1025,16 @@ GROUNDEDNESS_INSTRUCTIONS = (
     "- escalate: 근거가 질문의 주제를 다루지 않는다. 어휘가 겹쳐도 다른 항목을 다루면 escalate다.\n"
     "예를 들어 근거가 '주차비는 기타 경비로 지급'인데 질문이 '주차 위반 과태료'라면, "
     "주차라는 단어가 겹쳐도 과태료를 다루지 않으므로 escalate다.\n"
+    "판정과 함께 질문의 제도 영역과 대상 관계도 뽑는다.\n"
+    "- intent: ceremony(경조금) | housing(숙소지원금) | relocation(부임비·이전비) | "
+    "trip(출장·여비) | club(동호회) | other 중 하나. 질문이 실제로 묻는 제도를 고른다. "
+    "단어가 겹쳐도 묻는 제도가 아니면 고르지 않는다. '이사회 참석 출장비'는 relocation이 아니라 trip이다.\n"
+    "- relation: 경조사·경조금 질문에서 사유가 발생한 대상과 사용자의 관계. "
+    "본인, 본인 부모, 배우자 부모, 본인 형제·자매, 배우자 형제·자매, 자녀, 조부모처럼 적는다. "
+    "본인이 당사자면 '본인'이다. 해당 없으면 null.\n"
     "JSON만 출력한다. 형식: "
-    '{"verdict": "answerable|clarify|escalate", "reason": "한 문장", "missing": ["질문에 빠진 정보"]}'
+    '{"verdict": "answerable|clarify|escalate", "reason": "한 문장", "missing": ["질문에 빠진 정보"], '
+    '"intent": "ceremony|housing|relocation|trip|club|other", "relation": "관계 또는 null"}'
 )
 
 
@@ -1069,8 +1080,12 @@ def judge_groundedness(question, evidence):
         return {"verdict": "escalate", "reason": "판정 응답을 해석하지 못했습니다.", "missing": []}
     if result.get("verdict") not in ("answerable", "clarify", "escalate"):
         result["verdict"] = "escalate"
+    if result.get("intent") not in POLICY_INTENTS:
+        # 의도를 못 뽑으면 규칙을 걸러내지 않고 기존 키워드 판별에 맡깁니다.
+        result["intent"] = None
     result.setdefault("reason", "")
     result.setdefault("missing", [])
+    result.setdefault("relation", None)
     return result
 
 
@@ -1081,6 +1096,7 @@ class ConsultationState(TypedDict, total=False):
     history: list[dict]
     intent: str
     evidence: list[dict]
+    analysis: dict
     answer: str
     ui_actions: list[str]
 
@@ -1120,19 +1136,36 @@ def retrieve_policy_node(state: ConsultationState):
     return {"evidence": retrieve(question)}
 
 
+def analyze_question_node(state: ConsultationState):
+    """검색 근거로 답할 수 있는지와 함께 제도 영역·대상 관계를 한 번에 뽑습니다."""
+    return {"analysis": judge_groundedness(state["question"], state.get("evidence", []))}
+
+
+def rule_applies(analysis, *domains):
+    """의도를 못 뽑았으면 기존 판별을 쓰고, 뽑았으면 해당 제도일 때만 규칙을 켭니다."""
+    intent = (analysis or {}).get("intent")
+    return intent is None or intent in domains
+
+
 def apply_policy_rules_node(state: ConsultationState):
     """날짜·관계·금액처럼 규정으로 결정 가능한 항목을 우선 처리합니다."""
     question = state["question"]
     history = [] if starts_new_policy_topic(question) else state.get("history", [])
-    marriage_answer = build_sibling_marriage_answer(question)
-    seungjungsang_answer = build_seungjungsang_answer(question)
-    hoegap_answer = build_hoegap_answer(question, history)
-    death_answer = build_death_answer(question)
-    housing_exclusion_answer = build_housing_exclusion_answer(question)
-    housing_contract_change_answer = build_housing_contract_change_answer(question)
-    housing_move_answer = build_housing_move_answer(question)
-    relocation_answer = build_relocation_answer(question)
-    overseas_personal_return_answer = build_overseas_personal_return_answer(question)
+    analysis = state.get("analysis") or {}
+    relation = analysis.get("relation") or ""
+    ceremony = rule_applies(analysis, "ceremony")
+    # 결혼 문의에서 당사자가 본인이면 형제·자매 기준을 적용하지 않습니다.
+    sibling_case = ceremony and ("형제" in relation or "자매" in relation or not relation)
+    marriage_answer = build_sibling_marriage_answer(question) if sibling_case else ""
+    seungjungsang_answer = build_seungjungsang_answer(question) if ceremony else ""
+    hoegap_answer = build_hoegap_answer(question, history) if ceremony else ""
+    death_answer = build_death_answer(question) if ceremony else ""
+    housing = rule_applies(analysis, "housing")
+    housing_exclusion_answer = build_housing_exclusion_answer(question) if housing else ""
+    housing_contract_change_answer = build_housing_contract_change_answer(question) if housing else ""
+    housing_move_answer = build_housing_move_answer(question) if housing else ""
+    relocation_answer = build_relocation_answer(question) if rule_applies(analysis, "relocation") else ""
+    overseas_personal_return_answer = build_overseas_personal_return_answer(question) if rule_applies(analysis, "trip") else ""
     answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or housing_exclusion_answer or housing_contract_change_answer or housing_move_answer or relocation_answer or overseas_personal_return_answer
     if not answer:
         return {}
@@ -1209,7 +1242,7 @@ def generate_answer_node(state: ConsultationState):
     if not evidence:
         answer = build_unknown_policy_answer(question)
     else:
-        judgement = judge_groundedness(question, evidence)
+        judgement = state.get("analysis") or judge_groundedness(question, evidence)
         verdict = judgement["verdict"]
         if verdict == "clarify":
             answer = build_clarify_answer(question, evidence, judgement.get("missing", []))
@@ -1234,12 +1267,14 @@ def build_consultation_graph():
     graph = StateGraph(ConsultationState)
     graph.add_node("classify", classify_question_node)
     graph.add_node("retrieve", retrieve_policy_node)
+    graph.add_node("analyze", analyze_question_node)
     graph.add_node("rules", apply_policy_rules_node)
     graph.add_node("generate", generate_answer_node)
     graph.add_node("clarify", clarification_answer_node)
     graph.add_edge(START, "classify")
     graph.add_conditional_edges("classify", choose_after_classification, {"clarify": "clarify", "retrieve": "retrieve"})
-    graph.add_edge("retrieve", "rules")
+    graph.add_edge("retrieve", "analyze")
+    graph.add_edge("analyze", "rules")
     graph.add_conditional_edges("rules", choose_after_rules, {"end": END, "generate": "generate"})
     graph.add_edge("generate", END)
     graph.add_edge("clarify", END)
