@@ -854,31 +854,45 @@ def build_parking_answer(question):
 
 def is_club_application_question(question):
     """동호회 신규 신청 양식과 담당자 안내를 묻는 질문을 식별합니다."""
-    application_words = ("신청", "신청서", "신규", "결성", "등록", "양식", "회장", "총무", "계좌번호")
+    application_words = (
+        "신청", "신청서", "신규", "결성", "개설", "창설", "만들", "등록", "양식", "회장", "총무", "계좌번호"
+    )
     return "동호회" in question and any(word in question for word in application_words)
 
 
 def build_club_application_answer(question):
-    """동호회 신규 신청에는 운영 안내에 등록된 양식을 우선 보여줍니다."""
+    """동호회 신규 신청에는 실제 개설 순서와 준비 서류를 안내합니다."""
     if not is_club_application_question(question):
         return ""
     return (
-        "동호회 신규 신청 시 아래 항목을 작성해 주세요.\n\n"
-        "확인 결과\n"
-        "- 동호회 회장 / 총무\n"
-        "- 동호회 명\n"
-        "- 종목(스포츠, 문화 등)\n"
-        "- 동호회 회칙 작성 및 게시판 등록 여부\n"
-        "- 총무 계좌번호의 동호회 시스템 입력 여부(필수)\n"
-        "- 첨부 서류: 동호인 그룹 등록 신청서, 연간 행사 계획서, 회원 명단, 동호인 그룹 원칙\n\n"
-        "신청 후에는 노사발전그룹 동호회 담당자에게 신청 사실을 메일로 알려야 합니다. 아래 ‘동호회 신청 메일 작성’ 버튼을 누르면 수정 가능한 메일 초안을 만들 수 있습니다."
+        "동호회는 최소 5명의 회원을 모은 뒤 노사발전그룹과 사전 협의하여 개설할 수 있습니다.\n\n"
+        "진행 순서\n"
+        "1. 최소 5명의 회원을 구성합니다.\n"
+        "2. 동호회 결성 취지와 활동 계획을 정해 노사발전그룹과 사전 협의합니다.\n"
+        "3. 동호인 그룹 등록 신청서, 연간 행사 계획서, 회원 명단, 동호인 그룹 원칙을 준비합니다.\n"
+        "4. 회장·총무, 동호회명, 종목, 회칙 작성 여부를 등록하고 총무 계좌번호를 동호회 시스템에 입력합니다.\n"
+        "5. 노사발전그룹 동호회 담당자에게 신청 사실을 메일로 알리고 최종 심사를 받습니다.\n\n"
+        "아래 ‘동호회 신청 메일 작성’ 버튼을 누르면 제출 내용을 채울 수 있는 메일 초안을 만들 수 있습니다."
     )
 
 
 def build_club_answer(question):
-    """동호회 개설·가입·정기지원 문의에 공통 기준을 적용합니다."""
+    """동호회 가입·지원금·일반 문의에 질문 의도별 기준을 적용합니다."""
     if "동호회" not in question:
         return ""
+    if any(word in question for word in ("가입", "탈퇴", "회원")):
+        return (
+            "동호회는 소속 사업장과 실근무지를 합해 1인 최대 2개까지 가입할 수 있습니다.\n\n"
+            "확인 결과\n"
+            "- 동일 분야 동호회 이중 가입: 불가\n"
+            "- 소속 사업장과 실근무지가 다른 경우: 동일 분야 가입 가능\n"
+            "- 가입·탈퇴 방법: 신청서를 동호회 대표자에게 제출하고 사본을 노사발전그룹에 제출\n\n"
+            "가입하려는 동호회와 현재 가입 중인 동호회를 알려주시면 중복 여부를 확인해 드리겠습니다."
+        )
+    if not any(word in question for word in ("지원", "지원금", "보조금", "활동비", "금액", "지급", "정기", "특별")):
+        return (
+            "동호회에 관해 어떤 내용을 확인할까요? 개설 방법, 가입·탈퇴 또는 활동지원금 중 필요한 내용을 말씀해 주세요."
+        )
     return (
         "동호회 지원은 노사발전그룹의 등록·활동 실적 확인 후 지급됩니다.\n\n"
         "확인 결과\n"
@@ -991,6 +1005,7 @@ class ConsultationState(TypedDict, total=False):
     intent: str
     evidence: list[dict]
     answer: str
+    ui_actions: list[str]
 
 
 def classify_question_node(state: ConsultationState):
@@ -1058,7 +1073,10 @@ def apply_policy_rules_node(state: ConsultationState):
         evidence = [{"file": "여비관리기준.md", "score": 1, "text": "여비관리기준"}]
     else:
         evidence = [{"file": "동호회 관리 규정.md", "score": 1, "text": "동호회 관리 규정"}]
-    return {"answer": answer, "evidence": evidence}
+    result = {"answer": answer, "evidence": evidence}
+    if club_application_answer:
+        result["ui_actions"] = ["club_application_draft"]
+    return result
 
 
 def choose_after_rules(state: ConsultationState):
@@ -1214,7 +1232,11 @@ class Handler(SimpleHTTPRequestHandler):
             if not question:
                 raise ValueError("질문을 입력해 주세요.")
             result = CONSULTATION_GRAPH.invoke({"question": question, "history": body.get("history", [])})
-            self.respond(200, {"answer": result["answer"], "evidence": result.get("evidence", [])})
+            self.respond(200, {
+                "answer": result["answer"],
+                "evidence": result.get("evidence", []),
+                "ui_actions": result.get("ui_actions", []),
+            })
         except (ValueError, RuntimeError, HTTPError, URLError) as error:
             self.respond(400, {"error": str(error)})
         except Exception:
