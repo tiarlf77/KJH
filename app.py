@@ -21,7 +21,7 @@ SOURCE_FILES = {
     "동호회 관리 규정.md",
     "숙소지원금 운영 기준.txt",
     "여비관리 FAQ.md",
-    "여비관리기준.txt",
+    "여비관리기준.md",
 }
 # 규정의 '회갑'과 사용자가 자주 쓰는 '환갑'을 같은 의미로 처리합니다.
 HOEGAP_TERMS = ("회갑", "환갑")
@@ -141,11 +141,11 @@ def tokens(text):
     return set(re.findall(r"[가-힣A-Za-z0-9]+", text.lower()))
 
 
-def split_policy_chunks(path):
-    """Markdown은 제목 계층을 보존하고, 일반 규정은 빈 줄 기준으로 나눕니다."""
+def split_policy_chunks(path) -> list[dict]:
+    """리프 제목의 경로와 본문을 분리하고, 부모 서두는 첫 자식에 합칩니다."""
     text = path.read_text(encoding="utf-8")
     if path.suffix.lower() != ".md":
-        return [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+        return [{"path": "", "text": p.strip()} for p in re.split(r"\n\s*\n", text) if p.strip()]
 
     chunks = []
     headings = []
@@ -153,20 +153,25 @@ def split_policy_chunks(path):
     for line in text.splitlines():
         heading = re.match(r"^(#{1,6})\s+(.+?)\s*$", line)
         if heading:
-            if current_lines:
-                chunks.append({"heading": headings[-1] if headings else "", "text": "\n".join(current_lines).strip()})
-                current_lines = []
             level = len(heading.group(1))
             title = heading.group(2)
-            headings = headings[: level - 1] + [title]
-            current_lines.append(line)
+            # 더 깊은 제목이면 부모 서두를 유지하고, 리프가 끝날 때만 청크를 확정합니다.
+            if headings and level <= headings[-1][0]:
+                body = "\n".join(current_lines).strip()
+                if body:
+                    chunks.append({"path": " > ".join(title for _, title in headings), "text": body})
+                current_lines = []
+            # 제목 단계가 건너뛰어져도 실제 상위 제목만 경로에 남깁니다.
+            while headings and headings[-1][0] >= level:
+                headings.pop()
+            headings.append((level, title))
             continue
         current_lines.append(line)
-    if current_lines:
-        chunks.append({"heading": headings[-1] if headings else "", "text": "\n".join(current_lines).strip()})
+    body = "\n".join(current_lines).strip()
+    if body:
+        chunks.append({"path": " > ".join(title for _, title in headings), "text": body})
 
-    # 표·예외·증빙 목록은 제목과 본문을 함께 검색 근거로 제공합니다.
-    return [chunk["text"] for chunk in chunks if chunk["text"]]
+    return chunks
 
 
 def retrieve(question, limit=12):
@@ -191,13 +196,11 @@ def retrieve(question, limit=12):
             word in question for word in ("개인휴가", "개인 휴가", "개인 일정", "연차", "휴가")
         ):
             continue
-        text = path.read_text(encoding="utf-8")
-        paragraphs = split_policy_chunks(path)
-        for paragraph in paragraphs:
-            paragraph_tokens = tokens(paragraph)
-            score = len(query_tokens & paragraph_tokens)
+        for chunk in split_policy_chunks(path):
+            chunk_tokens = tokens(chunk["path"]) | tokens(chunk["text"])
+            score = len(query_tokens & chunk_tokens)
             if score:
-                results.append({"file": path.name, "score": score, "text": paragraph[:3000]})
+                results.append({"file": path.name, "score": score, "path": chunk["path"], "text": chunk["text"][:3000]})
     results.sort(key=lambda item: item["score"], reverse=True)
     if not results:
         return []
@@ -895,7 +898,8 @@ def call_openai(question, evidence, history=None):
     if not api_key:
         raise RuntimeError(".env에 OPENAI_API_KEY가 입력되지 않았습니다.")
     evidence_text = "\n\n".join(
-        f"[근거 {i}] {item['file']}\n{item['text']}" for i, item in enumerate(evidence, 1)
+        f"[근거 {i}] {item['file']} ({item.get('path', '')})\n{item['text']}"
+        for i, item in enumerate(evidence, 1)
     ) or "관련 규정 근거를 찾지 못했습니다."
     instructions = (
         "너는 사내 복리후생 규정 상담 Agent다. 네 개의 제공된 원문 규정을 기준 데이터로 사용하며, 반드시 제공된 근거만 사용해 한국어로 답한다. "
