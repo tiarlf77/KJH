@@ -705,13 +705,6 @@ def starts_new_policy_topic(question):
 
 def build_clarification_answer(question):
     """제도 유형을 알 수 없는 질문에 전체 상담 범위와 재질문 형식을 안내합니다."""
-    topics = (
-        "출장", "파견", "부임", "경조", "결혼", "회갑", "환갑", "출산", "사망", "돌아가", "별세", "승중상",
-        "숙소", "동호회", "발령", "이사", "부임비", "이전비", "전세", "월세", "임대차", "건물", "명의", "동거",
-        "백숙부", "매형", "매제", "제부", "형부", "올케",
-    )
-    if any(word in question for word in topics):
-        return ""
     return (
         "질문의 대상이나 제도 유형을 정확히 확인하기 어렵습니다.\n\n"
         "현재 상담 가능한 복리후생 항목은 다음과 같습니다.\n"
@@ -1029,6 +1022,9 @@ GROUNDEDNESS_INSTRUCTIONS = (
     "- intent: ceremony(경조금) | housing(숙소지원금) | relocation(부임비·이전비) | "
     "trip(출장·여비) | club(동호회) | other 중 하나. 질문이 실제로 묻는 제도를 고른다. "
     "단어가 겹쳐도 묻는 제도가 아니면 고르지 않는다. '이사회 참석 출장비'는 relocation이 아니라 trip이다.\n"
+    "other는 회사의 복리후생·비용 지원과 무관한 질문에만 쓴다. 점심 메뉴 추천이 그런 예다. "
+    "회사가 비용을 부담하는지 묻는 질문은 규정에 해당 항목이 없더라도 가장 가까운 영역을 고른다. "
+    "'주차 위반 과태료를 회사가 내주는지'는 other가 아니라 trip이다.\n"
     "- relation: 경조사·경조금 질문에서 사유가 발생한 대상과 사용자의 관계. "
     "본인, 본인 부모, 배우자 부모, 본인 형제·자매, 배우자 형제·자매, 자녀, 조부모처럼 적는다. "
     "본인이 당사자면 '본인'이다. 해당 없으면 null.\n"
@@ -1105,30 +1101,6 @@ class ConsultationState(TypedDict, total=False):
     analysis: dict
     answer: str
     ui_actions: list[str]
-
-
-def classify_question_node(state: ConsultationState):
-    """질문을 분류해 불명확 안내와 규정 검색의 흐름을 나눕니다."""
-    question = state["question"]
-    prior_text = " ".join(item.get("content", "") for item in state.get("history", [])[-6:])
-    # 직전 질문이 환갑이고 현재 입력이 생년월일이면, 숫자만 입력해도 같은 상담을 이어갑니다.
-    is_hoegap_followup = any(term in prior_text for term in HOEGAP_TERMS) and extract_birth_date(question)
-    if build_clarification_answer(question):
-        if is_hoegap_followup:
-            return {"intent": "ceremony"}
-        return {"intent": "clarification"}
-    if is_relocation_question(question):
-        return {"intent": "relocation"}
-    if "숙소" in question or "숙소지원금" in question:
-        return {"intent": "housing"}
-    if any(word in question for word in ("결혼", "회갑", "환갑", "출산", "사망", "돌아가", "별세", "승중상")):
-        return {"intent": "ceremony"}
-    return {"intent": "policy"}
-
-
-def choose_after_classification(state: ConsultationState):
-    """불명확 질문은 검색 없이 안내하고, 나머지는 해당 규정을 검색합니다."""
-    return "clarify" if state["intent"] == "clarification" else "retrieve"
 
 
 def retrieve_policy_node(state: ConsultationState):
@@ -1267,7 +1239,11 @@ def generate_answer_node(state: ConsultationState):
                 question, evidence, judgement.get("missing", []), judgement.get("finding", "")
             )
         elif verdict == "escalate":
-            answer = build_escalation_answer(judgement.get("reason", ""), evidence)
+            # 복리후생과 무관한 질문은 담당 부서로 넘기지 않고 상담 범위를 안내합니다.
+            if judgement.get("intent") == "other":
+                answer = build_clarification_answer(question)
+            else:
+                answer = build_escalation_answer(judgement.get("reason", ""), evidence)
         else:
             answer = call_openai(question, evidence, history)
     result = {"answer": answer}
@@ -1277,27 +1253,21 @@ def generate_answer_node(state: ConsultationState):
     return result
 
 
-def clarification_answer_node(state: ConsultationState):
-    """제도 유형이 모호한 질문에는 전체 복리후생 범위를 안내합니다."""
-    return {"answer": build_clarification_answer(state["question"]), "evidence": []}
 
 
 def build_consultation_graph():
     """상담 요청을 분류·검색·규칙판정·생성으로 연결한 LangGraph를 만듭니다."""
     graph = StateGraph(ConsultationState)
-    graph.add_node("classify", classify_question_node)
     graph.add_node("retrieve", retrieve_policy_node)
     graph.add_node("analyze", analyze_question_node)
     graph.add_node("rules", apply_policy_rules_node)
     graph.add_node("generate", generate_answer_node)
-    graph.add_node("clarify", clarification_answer_node)
-    graph.add_edge(START, "classify")
-    graph.add_conditional_edges("classify", choose_after_classification, {"clarify": "clarify", "retrieve": "retrieve"})
+    # 키워드로 미리 거르지 않고 모든 질문을 검색·판정에 태웁니다.
+    graph.add_edge(START, "retrieve")
     graph.add_edge("retrieve", "analyze")
     graph.add_edge("analyze", "rules")
     graph.add_conditional_edges("rules", choose_after_rules, {"end": END, "generate": "generate"})
     graph.add_edge("generate", END)
-    graph.add_edge("clarify", END)
     return graph.compile()
 
 
