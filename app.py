@@ -1194,11 +1194,17 @@ def choose_after_rules(state: ConsultationState):
     return "end" if state.get("answer") else "generate"
 
 
+# 총칙성 조항은 무엇을 물을지 고르는 선택지로 쓸모가 없습니다.
+GENERAL_SECTIONS = ("목적", "적용범위", "용어의 정의", "책임과 권한", "관련문서", "기록 및 첨부", "부칙")
+
+
 def evidence_options(evidence, limit=4):
     """검색된 청크의 계층 경로 말단을 되물을 선택지로 만듭니다."""
     options = []
     for item in evidence:
         path = item.get("path") or ""
+        if any(section in path for section in GENERAL_SECTIONS):
+            continue
         leaf = path.split(" > ")[-1].strip() if path else item.get("file", "")
         if leaf and leaf not in options:
             options.append(leaf)
@@ -1219,10 +1225,13 @@ def build_clarify_answer(question, evidence, missing, finding=""):
         lines.extend(f"- {item}" for item in missing[:4])
         lines.append("")
     if options:
-        lines.append("검색된 관련 조항")
+        lines.append("이런 내용을 확인하실 수 있습니다")
         lines.extend(f"- {option}" for option in options)
         lines.append("")
-    lines.append("어떤 내용을 확인하고 싶은지 알려주시면 해당 기준으로 안내해 드리겠습니다.")
+    lines.append(
+        "확인하고 싶은 항목을 말씀해 주시면 해당 기준으로 안내해 드리겠습니다. "
+        "바로 담당자 확인이 필요하시면 아래 ‘담당자에게 문의하기’ 버튼으로 문의 메일 초안을 만들 수 있습니다."
+    )
     return "\n".join(lines)
 
 
@@ -1237,8 +1246,8 @@ def build_escalation_answer(reason, evidence):
         lines.append(f"- 확인한 규정: {', '.join(Path(name).stem for name in checked)}")
     lines.append("- 판정: 주관 부서 확인 필요\n")
     lines.append(
-        "소속 부서장 또는 노무관리 주관부서에 문의해 주세요. "
-        "최종 지원 여부는 담당 부서의 규정 검토를 거쳐 결정됩니다."
+        "아래 ‘담당자에게 문의하기’ 버튼을 누르면 지금까지의 문의 내용이 담긴 메일 초안을 만들 수 있습니다. "
+        "최종 지원 여부는 노무관리 주관부서의 규정 검토를 거쳐 결정됩니다."
     )
     return "\n".join(lines)
 
