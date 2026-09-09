@@ -314,7 +314,8 @@ def cosine(left, right):
     return dot / size if size else 0.0
 
 
-def retrieve(question, limit=12):
+# 코퍼스가 작아 후보를 넓게 주고, 어떤 조항이 답인지는 판정 단계에서 가립니다.
+def retrieve(question, limit=20):
     """Markdown 제목 청크와 기존 텍스트 규정에서 관련 근거를 찾아 반환합니다."""
     query_tokens = tokens(question)
     compact_question = question.replace(" ", "")
