@@ -1,9 +1,12 @@
 import json
+import math
 import os
 import re
 import calendar
+from collections import Counter
 from datetime import datetime
 from datetime import date
+from functools import lru_cache
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import TypedDict
@@ -137,8 +140,14 @@ def load_env():
 
 
 def tokens(text):
-    """한글·영문·숫자 단위로 검색 토큰을 만듭니다."""
-    return set(re.findall(r"[가-힣A-Za-z0-9]+", text.lower()))
+    """한글은 어절과 음절 2-gram으로, 영문·숫자는 어절 단위로 검색 토큰을 만듭니다."""
+    # 조사·어미가 붙으면 어절이 달라지므로("해체하려면" vs "해체") 2-gram으로 겹치게 합니다.
+    words = re.findall(r"[가-힣A-Za-z0-9]+", text.lower())
+    result = set(words)
+    for word in words:
+        if len(word) > 1 and re.fullmatch(r"[가-힣]+", word):
+            result.update(word[index:index + 2] for index in range(len(word) - 1))
+    return result
 
 
 def split_policy_chunks(path) -> list[dict]:
@@ -174,6 +183,50 @@ def split_policy_chunks(path) -> list[dict]:
     return chunks
 
 
+BM25_K1 = 1.5
+BM25_B = 0.75
+# 최고 점수 파일 대비 이 비율 이상인 규정만 함께 근거로 사용합니다.
+TOP_FILE_SCORE_RATIO = 0.6
+
+
+@lru_cache(maxsize=1)
+def load_policy_index():
+    """승인된 규정의 청크와 idf를 한 번만 계산해 재사용합니다."""
+    # ponytail: 규정 파일이 런타임에 바뀌지 않는다고 보고 캐시합니다. 문서를 고치면 재시작이 필요합니다.
+    chunks = []
+    for path in sorted((*RULES_DIR.glob("*.txt"), *RULES_DIR.glob("*.md"))):
+        # 상담 근거로 승인된 파일만 사용하고 샘플 문서는 제외합니다.
+        if path.name not in SOURCE_FILES:
+            continue
+        for chunk in split_policy_chunks(path):
+            chunks.append({
+                "file": path.name,
+                "stem": path.stem,
+                "path": chunk["path"],
+                "text": chunk["text"],
+                "tokens": tokens(chunk["path"]) | tokens(chunk["text"]),
+            })
+    total = len(chunks)
+    frequency = Counter(token for chunk in chunks for token in chunk["tokens"])
+    # 흔한 단어(출장·지원)는 낮게, 희귀어(택시·해체)는 높게 가중합니다.
+    idf = {
+        token: math.log(1 + (total - count + 0.5) / (count + 0.5))
+        for token, count in frequency.items()
+    }
+    average_length = sum(len(chunk["tokens"]) for chunk in chunks) / total if total else 1.0
+    return chunks, idf, average_length
+
+
+def score_chunk(query_tokens, chunk, idf, average_length):
+    """희귀어 가중과 길이 정규화를 적용한 BM25 점수를 계산합니다."""
+    matched = query_tokens & chunk["tokens"]
+    if not matched:
+        return 0.0
+    length_ratio = len(chunk["tokens"]) / average_length if average_length else 1.0
+    normalizer = BM25_K1 * (1 - BM25_B + BM25_B * length_ratio) + 1
+    return sum(idf.get(token, 0.0) for token in matched) * (BM25_K1 + 1) / normalizer
+
+
 def retrieve(question, limit=12):
     """Markdown 제목 청크와 기존 텍스트 규정에서 관련 근거를 찾아 반환합니다."""
     query_tokens = tokens(question)
@@ -187,20 +240,21 @@ def retrieve(question, limit=12):
     for word, synonyms in QUERY_SYNONYMS.items():
         if word in question:
             query_tokens.update(synonyms)
+    chunks, idf, average_length = load_policy_index()
     results = []
-    for path in sorted((*RULES_DIR.glob("*.txt"), *RULES_DIR.glob("*.md"))):
-        # 상담 근거로 승인된 파일만 사용하고 샘플 문서는 제외합니다.
-        if path.name not in SOURCE_FILES:
-            continue
-        if path.stem == "여비관리 FAQ" and not any(
+    for chunk in chunks:
+        if chunk["stem"] == "여비관리 FAQ" and not any(
             word in question for word in ("개인휴가", "개인 휴가", "개인 일정", "연차", "휴가")
         ):
             continue
-        for chunk in split_policy_chunks(path):
-            chunk_tokens = tokens(chunk["path"]) | tokens(chunk["text"])
-            score = len(query_tokens & chunk_tokens)
-            if score:
-                results.append({"file": path.name, "score": score, "path": chunk["path"], "text": chunk["text"][:3000]})
+        score = score_chunk(query_tokens, chunk, idf, average_length)
+        if score:
+            results.append({
+                "file": chunk["file"],
+                "score": round(score, 3),
+                "path": chunk["path"],
+                "text": chunk["text"][:3000],
+            })
     results.sort(key=lambda item: item["score"], reverse=True)
     if not results:
         return []
@@ -214,9 +268,9 @@ def retrieve(question, limit=12):
         results = [item for item in results if Path(item["file"]).stem == "숙소지원금 운영 기준"]
         if not results:
             return []
-    # 최고 점수를 받은 규정 파일만 선택해 다른 제도 설명이 섞이지 않게 합니다.
-    top_score = results[0]["score"]
-    top_files = {item["file"] for item in results if item["score"] == top_score}
+    # 최고 점수에 근접한 규정 파일만 선택해 다른 제도 설명이 섞이지 않게 합니다.
+    threshold = results[0]["score"] * TOP_FILE_SCORE_RATIO
+    top_files = {item["file"] for item in results if item["score"] >= threshold}
     results = [item for item in results if item["file"] in top_files]
     selected = []
     # 여러 규정이 함께 적용될 수 있으므로 규정별 상위 근거를 먼저 확보합니다.
