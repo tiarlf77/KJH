@@ -1032,8 +1032,12 @@ GROUNDEDNESS_INSTRUCTIONS = (
     "- relation: 경조사·경조금 질문에서 사유가 발생한 대상과 사용자의 관계. "
     "본인, 본인 부모, 배우자 부모, 본인 형제·자매, 배우자 형제·자매, 자녀, 조부모처럼 적는다. "
     "본인이 당사자면 '본인'이다. 해당 없으면 null.\n"
+    "- finding: clarify일 때, 근거만으로 이미 확정할 수 있는 사실을 한두 문장으로 적는다. "
+    "기한이 지났다거나 원칙은 무엇이고 어떤 예외가 남았는지처럼 사용자가 바로 알아야 할 내용이다. "
+    "확정할 수 있는 것이 없으면 빈 문자열.\n"
     "JSON만 출력한다. 형식: "
     '{"verdict": "answerable|clarify|escalate", "reason": "한 문장", "missing": ["질문에 빠진 정보"], '
+    '"finding": "이미 확정되는 사실", '
     '"intent": "ceremony|housing|relocation|trip|club|other", "relation": "관계 또는 null"}'
 )
 
@@ -1050,7 +1054,8 @@ def judge_groundedness(question, evidence):
     payload = {
         "model": MODEL,
         "reasoning": {"effort": "none"},
-        "instructions": GROUNDEDNESS_INSTRUCTIONS,
+        # 신청기한처럼 경과일로 갈리는 판정에는 기준일이 있어야 합니다.
+        "instructions": f"{GROUNDEDNESS_INSTRUCTIONS}\n오늘 기준일은 {date.today().isoformat()}이다.",
         "input": [{"role": "user", "content": f"질문: {question}\n\n검색된 규정 근거:\n{evidence_text}"}],
     }
     request = Request(
@@ -1086,6 +1091,7 @@ def judge_groundedness(question, evidence):
     result.setdefault("reason", "")
     result.setdefault("missing", [])
     result.setdefault("relation", None)
+    result.setdefault("finding", "")
     return result
 
 
@@ -1201,10 +1207,13 @@ def evidence_options(evidence, limit=4):
     return options
 
 
-def build_clarify_answer(question, evidence, missing):
-    """제도는 찾았지만 답을 정할 정보가 부족할 때 선택지와 함께 되묻습니다."""
+def build_clarify_answer(question, evidence, missing, finding=""):
+    """확정된 사실을 먼저 알리고, 남은 정보만 선택지와 함께 되묻습니다."""
     options = evidence_options(evidence)
-    lines = ["문의하신 제도는 확인했지만, 답변을 확정하려면 정보가 조금 더 필요합니다.\n"]
+    if finding:
+        lines = [f"{finding}\n"]
+    else:
+        lines = ["문의하신 제도는 확인했지만, 답변을 확정하려면 정보가 조금 더 필요합니다.\n"]
     if missing:
         lines.append("확인이 필요한 내용")
         lines.extend(f"- {item}" for item in missing[:4])
@@ -1245,7 +1254,9 @@ def generate_answer_node(state: ConsultationState):
         judgement = state.get("analysis") or judge_groundedness(question, evidence)
         verdict = judgement["verdict"]
         if verdict == "clarify":
-            answer = build_clarify_answer(question, evidence, judgement.get("missing", []))
+            answer = build_clarify_answer(
+                question, evidence, judgement.get("missing", []), judgement.get("finding", "")
+            )
         elif verdict == "escalate":
             answer = build_escalation_answer(judgement.get("reason", ""), evidence)
         else:
