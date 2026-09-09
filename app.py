@@ -1138,8 +1138,9 @@ def apply_policy_rules_node(state: ConsultationState):
     analysis = state.get("analysis") or {}
     relation = analysis.get("relation") or ""
     ceremony = rule_applies(analysis, "ceremony")
-    # 결혼 문의에서 당사자가 본인이면 형제·자매 기준을 적용하지 않습니다.
-    sibling_case = ceremony and ("형제" in relation or "자매" in relation or not relation)
+    # 관계를 못 뽑았으면 형제·자매로 단정하지 않습니다. "유형"의 '형'처럼 부분문자열만 걸린
+    # 질문에 20만원 지급을 확정해 버리기 때문에, 판정이 관계를 명시했을 때만 규칙을 켭니다.
+    sibling_case = ceremony and ("형제" in relation or "자매" in relation)
     marriage_answer = build_sibling_marriage_answer(question) if sibling_case else ""
     seungjungsang_answer = build_seungjungsang_answer(question) if ceremony else ""
     hoegap_answer = build_hoegap_answer(question, history) if ceremony else ""
