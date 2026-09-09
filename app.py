@@ -1016,6 +1016,9 @@ GROUNDEDNESS_INSTRUCTIONS = (
     "판정은 셋 중 하나다.\n"
     "- answerable: 근거에 질문의 답이 실제로 들어 있다.\n"
     "- clarify: 제도는 맞게 찾았으나 관계·금액·기간처럼 답을 정하는 정보가 질문에 빠져 있다.\n"
+    "clarify일 때 missing에는 질문에 아직 없는 정보만 넣는다. 질문이 이미 밝힌 사실은 "
+    "다시 묻지 않는다. 예를 들어 질문에 '개인 사정으로'라고 적혀 있으면 "
+    "업무상인지 개인 사정인지는 묻지 않는다. 되물을 것이 남지 않으면 clarify가 아니다.\n"
     "- escalate: 근거가 질문의 주제를 다루지 않는다. 어휘가 겹쳐도 다른 항목을 다루면 escalate다.\n"
     "예를 들어 근거가 '주차비는 기타 경비로 지급'인데 질문이 '주차 위반 과태료'라면, "
     "주차라는 단어가 겹쳐도 과태료를 다루지 않으므로 escalate다.\n"
@@ -1108,7 +1111,13 @@ def choose_after_classification(state: ConsultationState):
 
 def retrieve_policy_node(state: ConsultationState):
     """현재 제도 질문에 맞는 규정 근거를 검색합니다."""
-    return {"evidence": retrieve(state["question"])}
+    question = state["question"]
+    history = state.get("history", [])
+    # 부족한 정보를 채우는 후속 답변은 그 자체로 주제를 담지 않으므로 직전 질문을 함께 검색합니다.
+    previous = [item.get("content", "") for item in history if item.get("role") == "user"]
+    if previous:
+        question = f"{previous[-1]}\n{question}"
+    return {"evidence": retrieve(question)}
 
 
 def apply_policy_rules_node(state: ConsultationState):
