@@ -1028,12 +1028,15 @@ GROUNDEDNESS_INSTRUCTIONS = (
     "- relation: 경조사·경조금 질문에서 사유가 발생한 대상과 사용자의 관계. "
     "본인, 본인 부모, 배우자 부모, 본인 형제·자매, 배우자 형제·자매, 자녀, 조부모처럼 적는다. "
     "본인이 당사자면 '본인'이다. 해당 없으면 null.\n"
+    "- receiving_support: 질문자가 지금 숙소지원금을 이미 받고 있다고 밝혔으면 true, "
+    "받을 수 있는지 묻는 것이면 false, 알 수 없으면 null. "
+    "'숙소지원금 받을 수 있나요'는 false이고 '숙소지원금 받다가 발령났어요'는 true다.\n"
     "- finding: clarify일 때, 근거만으로 이미 확정할 수 있는 사실을 한두 문장으로 적는다. "
     "기한이 지났다거나 원칙은 무엇이고 어떤 예외가 남았는지처럼 사용자가 바로 알아야 할 내용이다. "
     "확정할 수 있는 것이 없으면 빈 문자열.\n"
     "JSON만 출력한다. 형식: "
     '{"verdict": "answerable|clarify|escalate", "reason": "한 문장", "missing": ["질문에 빠진 정보"], '
-    '"finding": "이미 확정되는 사실", '
+    '"finding": "이미 확정되는 사실", "receiving_support": true, '
     '"intent": "ceremony|housing|relocation|trip|club|other", "relation": "관계 또는 null"}'
 )
 
@@ -1088,6 +1091,8 @@ def judge_groundedness(question, evidence):
     result.setdefault("missing", [])
     result.setdefault("relation", None)
     result.setdefault("finding", "")
+    if result.get("receiving_support") not in (True, False):
+        result["receiving_support"] = None
     return result
 
 
@@ -1141,7 +1146,9 @@ def apply_policy_rules_node(state: ConsultationState):
     housing = rule_applies(analysis, "housing")
     housing_exclusion_answer = build_housing_exclusion_answer(question) if housing else ""
     housing_contract_change_answer = build_housing_contract_change_answer(question) if housing else ""
-    housing_move_answer = build_housing_move_answer(question) if housing else ""
+    # "숙소지원금 받을 수 있나요"를 기존 수급으로 오인하지 않도록 사실 확인을 함께 봅니다.
+    receiving = analysis.get("receiving_support")
+    housing_move_answer = build_housing_move_answer(question) if housing and receiving is not False else ""
     relocation_answer = build_relocation_answer(question) if rule_applies(analysis, "relocation") else ""
     overseas_personal_return_answer = build_overseas_personal_return_answer(question) if rule_applies(analysis, "trip") else ""
     answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or housing_exclusion_answer or housing_contract_change_answer or housing_move_answer or relocation_answer or overseas_personal_return_answer
