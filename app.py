@@ -380,9 +380,19 @@ def retrieve(question, limit=12):
     top_files = {item["file"] for item in results if item["score"] >= threshold}
     results = [item for item in results if item["file"] in top_files]
     selected = []
+    taken = set()
     # 여러 규정이 함께 적용될 수 있으므로 규정별 상위 근거를 먼저 확보합니다.
     for path in sorted({item["file"] for item in results}):
-        selected.extend([item for item in results if item["file"] == path][:3])
+        for item in [item for item in results if item["file"] == path][:3]:
+            selected.append(item)
+            taken.add((item["file"], item["path"]))
+    # 관련 규정이 하나뿐이면 파일별 상한 탓에 근거가 3건으로 잘리므로 남은 자리를 채웁니다.
+    for item in results:
+        if len(selected) >= limit:
+            break
+        if (item["file"], item["path"]) not in taken:
+            selected.append(item)
+            taken.add((item["file"], item["path"]))
     selected.sort(key=lambda item: item["score"], reverse=True)
     return selected[:limit]
 
@@ -806,20 +816,6 @@ def build_housing_exclusion_answer(question):
     )
 
 
-def build_housing_lease_answer(question):
-    """일반 임대인 전세·월세 계약은 숙소지원금 요건만 간결하게 확인합니다."""
-    if not any(word in question for word in ("전세", "월세", "임대차")):
-        return ""
-    return (
-        "일반 임대인과 체결하는 전세·월세 계약은 숙소지원금 요건을 충족하면 검토할 수 있습니다.\n\n"
-        "확인 결과\n"
-        "- 전세 지원 기준: 전세금 10,000,000원당 월 100,000원\n"
-        "- 월세 지원 기준: 월 차임만 지원하며 관리비·공과금 등은 제외\n"
-        "- 확인 조건: 새 근무지, 실제 단신 거주 여부, 본인·배우자 주택 보유 여부, 임대인과의 가족관계, 임대차계약서\n\n"
-        "계약 형태와 임대인 관계, 새 근무지를 알려주시면 지원 가능 여부를 확인해 드리겠습니다."
-    )
-
-
 def build_housing_contract_change_answer(question):
     """기존 수급자의 월세·전세 전환은 변경 계약 기준과 증빙을 안내합니다."""
     if not ("월세" in question and "전세" in question):
@@ -913,106 +909,6 @@ def build_overseas_personal_return_answer(question):
     )
 
 
-def build_domestic_trip_answer(question):
-    """국내 출장의 핵심 지급 기준은 모델 해석 없이 고정 안내합니다."""
-    if not any(word in question for word in ("출장", "국내여비", "교통비", "숙박비", "식비", "현지교통비")):
-        return ""
-    if any(word in question for word in ("해외", "파견", "부임")):
-        return ""
-    is_weekend = any(word in question for word in ("토요일", "일요일", "주말", "휴일"))
-    is_return = any(word in question for word in ("복귀", "귀임", "돌아오", "돌아가"))
-    is_personal_reason = any(word in question for word in ("개인", "사적", "볼일", "볼 일", "개인 일정", "개인 용무"))
-    is_early_travel = any(
-        word in question for word in ("미리", "선출발", "조기 이동", "먼저 출발", "올라가", "내려가")
-    )
-    if is_weekend and is_personal_reason and is_early_travel and not is_return:
-        return (
-            "개인 사유로 출장 전에 주말에 이동하는 경우에는 교통비 지급 대상으로 단정할 수 없습니다.\n\n"
-            "확인 결과\n"
-            "- 출장 일정: 회사가 승인한 출장명령서의 시작일 확인 필요\n"
-            "- 조기 이동 사유: 개인 일정\n"
-            "- 추가 비용: 개인 일정으로 인해 추가된 비용은 지원 근거가 없습니다.\n"
-            "- 통상 교통비: 정상 출장 일정에도 발생할 비용의 인정 여부는 별도 확인 필요\n"
-            "- 판정: 예외사항으로 주관 부서 확인 필요\n\n"
-            "주말 이동이 출장명령에 포함되어 있는지 확인한 뒤 소속 부서장 또는 노무관리 주관부서에 "
-            "문의해 주세요. 최종 지급 여부는 담당 부서의 승인과 증빙 검토를 거쳐 결정됩니다."
-        )
-    if is_weekend and is_return:
-        return (
-            "주말 복귀 교통비의 지급 여부는 현재 제공된 여비관리기준만으로 확정하기 어렵습니다.\n\n"
-            "확인 결과\n"
-            "- 일반 기준: 승인된 국내 출장의 교통비는 실비로 사후 정산\n"
-            "- 확인 필요: 주말 이동이 출장명령 또는 업무상 필요에 따른 승인 일정인지 여부\n"
-            "- 추가 확인: 개인 사유로 복귀를 연기했는지 여부\n"
-            "- 근태 연계: 주말 복귀 일정의 근태 인정 기준 확인 필요\n"
-            "- 판정: 예외사항으로 주관 부서 확인 필요\n\n"
-            "출장명령서, 실제 출장 일정 및 주말 복귀 사유를 확인한 뒤 소속 부서장 또는 "
-            "노무관리 주관부서에 문의해 주세요. 최종 근태 인정 및 교통비 지급 여부는 "
-            "담당 부서의 승인과 증빙 검토를 거쳐 결정됩니다."
-        )
-    early_departure = any(word in question for word in ("일요일", "전일", "선출발", "미리 출발", "하루 전", "전날"))
-    if early_departure and not any(word in question for word in ("국내", "해외")):
-        return (
-            "일요일에 미리 출발하는 출장의 숙박비 지급 여부는 국내출장인지 해외출장인지에 따라 기준이 다릅니다.\n\n"
-            "해외출장은 부득이하게 전일 이동해야 하는 경우 국내여비 기준에 따라 숙박비·시외교통비·1일분 소액경비를 지급한다는 규정이 있습니다.\n\n"
-            "반면 국내출장의 일요일 선출발 숙박비는 제공된 규정만으로 명확히 확인하기 어렵습니다. 출장 유형과 선출발 사유를 알려주시거나, 출장명령서와 실제 이동일을 기준으로 주관 부서에 문의해 주세요."
-        )
-    monday_start = any(word in question for word in ("월요일부터", "월요일 부터", "월요일에 시작", "월요일 출장"))
-    if early_departure and monday_start:
-        return (
-            "국내출장에서 일요일에 선출발하여 월요일부터 출장하는 경우, 제공된 규정만으로는 "
-            "일요일 숙박비 및 소액경비 지급 여부를 명확히 확인할 수 없습니다.\n\n"
-            "확인 결과\n"
-            "- 해외출장: 전일 이동이 불가피한 경우 국내여비 기준에 따라 숙박비·시외교통비·1일분 소액경비 지급\n"
-            "- 국내출장: 일요일 선출발에 동일 기준을 적용한다는 명시적 규정 확인 필요\n"
-            "- 판정: 주관 부서 확인 필요\n\n"
-            "출장명령서, 실제 이동일, 출장지 및 선출발 사유를 확인한 뒤 주관 부서에 "
-            "지급 가능 여부를 문의해 주세요. 최종 지급 여부는 주관 부서의 승인 및 증빙자료 검토를 거쳐 결정됩니다."
-        )
-    return (
-        "국내 출장 여비는 사후 정산으로 지급합니다.\n\n"
-        "확인 결과\n"
-        "- 교통비: 철도·선박·항공·자동차 실비\n"
-        "- 자가용: 유류비·통행료·감가상각비(50원/km) 실비, 통행료 영수증 필요\n"
-        "- 숙박비: 1박 100,000원 한도 내 실비\n"
-        "- 소액경비: 식비 1일 30,000원, 현지교통비 1일 20,000원\n"
-        "- 식비 차감: 외부 또는 내부에서 제공받은 식사는 1회당 10,000원 차감\n"
-        "- 정산: 귀임 후 30일 이내 증빙 제출\n\n"
-        "출장 목적·기간·교통수단·숙박 여부를 알려주시면 적용 가능한 항목만 정리해 드리겠습니다."
-    )
-
-
-def build_parking_answer(question):
-    """국내출장 주차비와 교육연수·해외출장 주차비를 서로 다른 기준으로 안내합니다."""
-    has_parking = any(word in question for word in ("주차", "주차비", "주차장"))
-    is_training_or_overseas = any(word in question for word in ("해외출장", "해외 출장", "교육연수", "교육 연수"))
-    is_domestic_parking = any(word in question for word in ("국내", "공항"))
-    is_domestic_trip = any(word in question for word in ("국내출장", "국내 출장"))
-    if not has_parking:
-        return ""
-    if is_training_or_overseas and is_domestic_parking:
-        trip_type = "교육연수" if any(word in question for word in ("교육연수", "교육 연수")) else "해외출장"
-        return (
-            f"{trip_type}을 위한 국내 주차비는 지원되지 않습니다.\n\n"
-            "확인 결과\n"
-            f"- 출장 유형: {trip_type}\n"
-            "- 비용 항목: 국내 주차비\n"
-            "- 판정: 지급 불가\n"
-            "- 근거: 교육연수 및 해외출장 시 국내 주차비는 지급하지 않음"
-        )
-    if is_domestic_trip:
-        return (
-            "일반 국내출장 중 유료 주차비는 별도 실비 정산 항목이 아니라 소액경비의 현지교통비 범위에서 처리합니다.\n\n"
-            "확인 결과\n"
-            "- 출장 유형: 국내출장\n"
-            "- 비용 항목: 유료 주차비\n"
-            "- 처리 기준: 소액경비 중 현지교통비로 충당\n"
-            "- 현지교통비 기준: 1일 20,000원\n\n"
-            "다만 교육연수 및 해외출장 시 발생한 국내 주차비는 지급되지 않습니다."
-        )
-    return ""
-
-
 def is_club_application_question(question):
     """동호회 신규 신청 양식과 담당자 안내를 묻는 질문을 식별합니다."""
     application_words = (
@@ -1021,50 +917,6 @@ def is_club_application_question(question):
     return "동호회" in question and any(word in question for word in application_words)
 
 
-def build_club_application_answer(question):
-    """동호회 신규 신청에는 실제 개설 순서와 준비 서류를 안내합니다."""
-    if not is_club_application_question(question):
-        return ""
-    return (
-        "동호회는 최소 5명의 회원을 모은 뒤 노사발전그룹과 사전 협의하여 개설할 수 있습니다.\n\n"
-        "진행 순서\n"
-        "1. 최소 5명의 회원을 구성합니다.\n"
-        "2. 동호회 결성 취지와 활동 계획을 정해 노사발전그룹과 사전 협의합니다.\n"
-        "3. 동호인 그룹 등록 신청서, 연간 행사 계획서, 회원 명단, 동호인 그룹 원칙을 준비합니다.\n"
-        "4. 회장·총무, 동호회명, 종목, 회칙 작성 여부를 등록하고 총무 계좌번호를 동호회 시스템에 입력합니다.\n"
-        "5. 노사발전그룹 동호회 담당자에게 신청 사실을 메일로 알리고 최종 심사를 받습니다.\n\n"
-        "아래 ‘동호회 신청 메일 작성’ 버튼을 누르면 제출 내용을 채울 수 있는 메일 초안을 만들 수 있습니다."
-    )
-
-
-def build_club_answer(question):
-    """동호회 가입·지원금·일반 문의에 질문 의도별 기준을 적용합니다."""
-    if "동호회" not in question:
-        return ""
-    if any(word in question for word in ("가입", "탈퇴", "회원")):
-        return (
-            "동호회는 소속 사업장과 실근무지를 합해 1인 최대 2개까지 가입할 수 있습니다.\n\n"
-            "확인 결과\n"
-            "- 동일 분야 동호회 이중 가입: 불가\n"
-            "- 소속 사업장과 실근무지가 다른 경우: 동일 분야 가입 가능\n"
-            "- 가입·탈퇴 방법: 신청서를 동호회 대표자에게 제출하고 사본을 노사발전그룹에 제출\n\n"
-            "가입하려는 동호회와 현재 가입 중인 동호회를 알려주시면 중복 여부를 확인해 드리겠습니다."
-        )
-    if not any(word in question for word in ("지원", "지원금", "보조금", "활동비", "금액", "지급", "정기", "특별")):
-        return (
-            "동호회에 관해 어떤 내용을 확인할까요? 개설 방법, 가입·탈퇴 또는 활동지원금 중 필요한 내용을 말씀해 주세요."
-        )
-    return (
-        "동호회 지원은 노사발전그룹의 등록·활동 실적 확인 후 지급됩니다.\n\n"
-        "확인 결과\n"
-        "- 결성·활동 최소 인원: 5명\n"
-        "- 가입: 소속 사업장과 실근무지를 합해 1인 최대 2개, 동일 분야 이중 가입 불가\n"
-        "- 정기지원: 분기별 1회 이상 활동 시 1인 30,000원, 최대 300,000원\n"
-        "- 특별지원: 연간 2회, 1인 10,000원, 최대 300,000원\n"
-        "- 지급 시기: 분기 활동 후 실적 등록 및 검토 완료 후 지급\n"
-        "- 필요 서류: 활동실적 보고서, 영수증, 활동사진, 전체 회원·참석자 명단\n\n"
-        "신규 동호회는 등록 3개월 이후부터 지원하며, 향우회·동문회·부서 친목회는 지원 대상이 아닙니다."
-    )
 
 
 def call_openai(question, evidence, history=None):
@@ -1179,7 +1031,7 @@ def judge_groundedness(question, evidence):
         return {"verdict": "escalate", "reason": "검색된 근거가 없습니다.", "missing": []}
     evidence_text = "\n\n".join(
         f"[근거 {index}] {item['file']} ({item.get('path', '')})\n{item['text'][:1200]}"
-        for index, item in enumerate(evidence[:5], 1)
+        for index, item in enumerate(evidence, 1)
     )
     payload = {
         "model": MODEL,
@@ -1268,37 +1120,25 @@ def apply_policy_rules_node(state: ConsultationState):
     hoegap_answer = build_hoegap_answer(question, history)
     death_answer = build_death_answer(question)
     housing_exclusion_answer = build_housing_exclusion_answer(question)
-    housing_lease_answer = build_housing_lease_answer(question)
     housing_contract_change_answer = build_housing_contract_change_answer(question)
     housing_move_answer = build_housing_move_answer(question)
     relocation_answer = build_relocation_answer(question)
     overseas_personal_return_answer = build_overseas_personal_return_answer(question)
-    trip_answer = build_domestic_trip_answer(question)
-    parking_answer = build_parking_answer(question)
-    club_application_answer = build_club_application_answer(question)
-    club_answer = build_club_answer(question)
-    answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or housing_exclusion_answer or housing_contract_change_answer or housing_move_answer or housing_lease_answer or relocation_answer or overseas_personal_return_answer or parking_answer or trip_answer or club_application_answer or club_answer
+    answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or housing_exclusion_answer or housing_contract_change_answer or housing_move_answer or relocation_answer or overseas_personal_return_answer
     if not answer:
         return {}
     if marriage_answer or seungjungsang_answer or hoegap_answer or death_answer:
         evidence = [{"file": "경조금 지급기준.md", "score": 1, "text": "경조금 지급기준"}]
-    elif housing_exclusion_answer or housing_contract_change_answer or housing_lease_answer or housing_move_answer:
+    elif housing_exclusion_answer or housing_contract_change_answer or housing_move_answer:
         evidence = [{"file": "숙소지원금 운영 기준.md", "score": 1, "text": "숙소지원금 운영 기준"}]
     elif relocation_answer:
         evidence = [
             {"file": "숙소지원금 운영 기준.md", "score": 1, "text": "숙소지원금 운영 기준"},
             {"file": "여비관리기준.md", "score": 1, "text": "여비관리기준"},
         ]
-    elif overseas_personal_return_answer:
-        evidence = [{"file": "여비관리 FAQ.md", "score": 1, "text": "해외출장 종료 후 개인 일정 체류"}]
-    elif parking_answer or trip_answer:
-        evidence = [{"file": "여비관리기준.md", "score": 1, "text": "여비관리기준"}]
     else:
-        evidence = [{"file": "동호회 관리 규정.md", "score": 1, "text": "동호회 관리 규정"}]
-    result = {"answer": answer, "evidence": evidence}
-    if club_application_answer:
-        result["ui_actions"] = ["club_application_draft"]
-    return result
+        evidence = [{"file": "여비관리 FAQ.md", "score": 1, "text": "해외출장 종료 후 개인 일정 체류"}]
+    return {"answer": answer, "evidence": evidence}
 
 
 def choose_after_rules(state: ConsultationState):
@@ -1358,15 +1198,21 @@ def generate_answer_node(state: ConsultationState):
     history = [] if starts_new_policy_topic(question) else state.get("history", [])
     evidence = state.get("evidence", [])
     if not evidence:
-        return {"answer": build_unknown_policy_answer(question)}
-    judgement = judge_groundedness(question, evidence)
-    verdict = judgement["verdict"]
-    if verdict == "clarify":
-        return {"answer": build_clarify_answer(question, evidence, judgement.get("missing", []))}
-    if verdict == "escalate":
-        return {"answer": build_escalation_answer(judgement.get("reason", ""), evidence)}
-    answer = call_openai(question, evidence, history)
-    return {"answer": answer}
+        answer = build_unknown_policy_answer(question)
+    else:
+        judgement = judge_groundedness(question, evidence)
+        verdict = judgement["verdict"]
+        if verdict == "clarify":
+            answer = build_clarify_answer(question, evidence, judgement.get("missing", []))
+        elif verdict == "escalate":
+            answer = build_escalation_answer(judgement.get("reason", ""), evidence)
+        else:
+            answer = call_openai(question, evidence, history)
+    result = {"answer": answer}
+    # 동호회 신규 신청 문의에는 답변 경로와 무관하게 메일 초안 버튼을 띄웁니다.
+    if is_club_application_question(question):
+        result["ui_actions"] = ["club_application_draft"]
+    return result
 
 
 def clarification_answer_node(state: ConsultationState):
