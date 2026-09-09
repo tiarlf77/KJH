@@ -1158,6 +1158,67 @@ def call_openai(question, evidence, history=None):
     return "\n".join(parts).strip() or "응답 내용을 확인하지 못했습니다."
 
 
+GROUNDEDNESS_INSTRUCTIONS = (
+    "너는 사내 복리후생 규정 상담의 근거 판정기다. 사용자 질문과 검색된 규정 근거를 읽고, "
+    "그 근거만으로 질문에 답할 수 있는지 판정한다. 답을 작성하지 말고 판정만 한다.\n"
+    "판정은 셋 중 하나다.\n"
+    "- answerable: 근거에 질문의 답이 실제로 들어 있다.\n"
+    "- clarify: 제도는 맞게 찾았으나 관계·금액·기간처럼 답을 정하는 정보가 질문에 빠져 있다.\n"
+    "- escalate: 근거가 질문의 주제를 다루지 않는다. 어휘가 겹쳐도 다른 항목을 다루면 escalate다.\n"
+    "예를 들어 근거가 '주차비는 기타 경비로 지급'인데 질문이 '주차 위반 과태료'라면, "
+    "주차라는 단어가 겹쳐도 과태료를 다루지 않으므로 escalate다.\n"
+    "JSON만 출력한다. 형식: "
+    '{"verdict": "answerable|clarify|escalate", "reason": "한 문장", "missing": ["질문에 빠진 정보"]}'
+)
+
+
+def judge_groundedness(question, evidence):
+    """검색 근거만으로 답할 수 있는지 LLM에 판정을 맡깁니다."""
+    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not api_key or not evidence:
+        return {"verdict": "escalate", "reason": "검색된 근거가 없습니다.", "missing": []}
+    evidence_text = "\n\n".join(
+        f"[근거 {index}] {item['file']} ({item.get('path', '')})\n{item['text'][:1200]}"
+        for index, item in enumerate(evidence[:5], 1)
+    )
+    payload = {
+        "model": MODEL,
+        "reasoning": {"effort": "none"},
+        "instructions": GROUNDEDNESS_INSTRUCTIONS,
+        "input": [{"role": "user", "content": f"질문: {question}\n\n검색된 규정 근거:\n{evidence_text}"}],
+    }
+    request = Request(
+        "https://api.openai.com/v1/responses",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=45) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError, OSError):
+        # 판정에 실패하면 단정하지 않고 담당 부서 확인으로 보냅니다.
+        return {"verdict": "escalate", "reason": "근거 판정을 수행하지 못했습니다.", "missing": []}
+    text = data.get("output_text") or ""
+    if not text:
+        for output in data.get("output", []):
+            for content in output.get("content", []):
+                if content.get("type") == "output_text":
+                    text += content.get("text", "")
+    match = re.search(r"\{.*\}", text, re.S)
+    if not match:
+        return {"verdict": "escalate", "reason": "판정 응답을 해석하지 못했습니다.", "missing": []}
+    try:
+        result = json.loads(match.group(0))
+    except json.JSONDecodeError:
+        return {"verdict": "escalate", "reason": "판정 응답을 해석하지 못했습니다.", "missing": []}
+    if result.get("verdict") not in ("answerable", "clarify", "escalate"):
+        result["verdict"] = "escalate"
+    result.setdefault("reason", "")
+    result.setdefault("missing", [])
+    return result
+
+
 class ConsultationState(TypedDict, total=False):
     """LangGraph가 상담 단계 사이에서 전달하는 최소 상태입니다."""
 
@@ -1245,13 +1306,66 @@ def choose_after_rules(state: ConsultationState):
     return "end" if state.get("answer") else "generate"
 
 
+def evidence_options(evidence, limit=4):
+    """검색된 청크의 계층 경로 말단을 되물을 선택지로 만듭니다."""
+    options = []
+    for item in evidence:
+        path = item.get("path") or ""
+        leaf = path.split(" > ")[-1].strip() if path else item.get("file", "")
+        if leaf and leaf not in options:
+            options.append(leaf)
+        if len(options) == limit:
+            break
+    return options
+
+
+def build_clarify_answer(question, evidence, missing):
+    """제도는 찾았지만 답을 정할 정보가 부족할 때 선택지와 함께 되묻습니다."""
+    options = evidence_options(evidence)
+    lines = ["문의하신 제도는 확인했지만, 답변을 확정하려면 정보가 조금 더 필요합니다.\n"]
+    if missing:
+        lines.append("확인이 필요한 내용")
+        lines.extend(f"- {item}" for item in missing[:4])
+        lines.append("")
+    if options:
+        lines.append("검색된 관련 조항")
+        lines.extend(f"- {option}" for option in options)
+        lines.append("")
+    lines.append("어떤 내용을 확인하고 싶은지 알려주시면 해당 기준으로 안내해 드리겠습니다.")
+    return "\n".join(lines)
+
+
+def build_escalation_answer(reason, evidence):
+    """규정이 다루지 않는 문의는 단정하지 않고 담당 부서로 넘깁니다."""
+    checked = sorted({item.get("file", "") for item in evidence if item.get("file")})
+    lines = ["문의하신 내용은 현재 제공된 규정만으로 지원 여부를 확정할 수 없습니다.\n"]
+    lines.append("확인 결과")
+    if reason:
+        lines.append(f"- 판정 사유: {reason}")
+    if checked:
+        lines.append(f"- 확인한 규정: {', '.join(Path(name).stem for name in checked)}")
+    lines.append("- 판정: 주관 부서 확인 필요\n")
+    lines.append(
+        "소속 부서장 또는 노무관리 주관부서에 문의해 주세요. "
+        "최종 지원 여부는 담당 부서의 규정 검토를 거쳐 결정됩니다."
+    )
+    return "\n".join(lines)
+
+
 def generate_answer_node(state: ConsultationState):
-    """규칙으로 확정할 수 없는 일반 문의를 근거 기반 LLM으로 답변합니다."""
+    """근거로 답할 수 있는지 먼저 판정하고, 답변·되묻기·이관으로 나눕니다."""
     question = state["question"]
     history = [] if starts_new_policy_topic(question) else state.get("history", [])
-    if not state.get("evidence"):
+    evidence = state.get("evidence", [])
+    if not evidence:
         return {"answer": build_unknown_policy_answer(question)}
-    answer = call_openai(question, state.get("evidence", []), history)
+    judgement = judge_groundedness(question, evidence)
+    verdict = judgement["verdict"]
+    if verdict == "clarify":
+        return {"answer": build_clarify_answer(question, evidence, judgement.get("missing", []))}
+    if verdict == "escalate":
+        return {"answer": build_escalation_answer(judgement.get("reason", ""), evidence)}
+    answer = call_openai(question, evidence, history)
     return {"answer": answer}
 
 
