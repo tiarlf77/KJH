@@ -192,7 +192,7 @@ def retrieve(question, limit=12):
         # 상담 근거로 승인된 파일만 사용하고 샘플 문서는 제외합니다.
         if path.name not in SOURCE_FILES:
             continue
-        if path.name == "여비관리 FAQ.md" and not any(
+        if path.stem == "여비관리 FAQ" and not any(
             word in question for word in ("개인휴가", "개인 휴가", "개인 일정", "연차", "휴가")
         ):
             continue
@@ -206,12 +206,12 @@ def retrieve(question, limit=12):
         return []
     # 결혼 문의는 일반적인 '지원' 표현 때문에 다른 복리후생 규정이 섞이지 않게 합니다.
     if "결혼" in question:
-        results = [item for item in results if item["file"] == "경조금 지급기준.md"]
+        results = [item for item in results if Path(item["file"]).stem == "경조금 지급기준"]
         if not results:
             return []
     # 숙소지원금 질문에는 출장·여비 규정이 섞이지 않도록 전용 기준만 사용합니다.
     if any(word in question for word in ("숙소", "숙소지원금", "주거", "월세", "전세")):
-        results = [item for item in results if item["file"] == "숙소지원금 운영 기준.md"]
+        results = [item for item in results if Path(item["file"]).stem == "숙소지원금 운영 기준"]
         if not results:
             return []
     # 최고 점수를 받은 규정 파일만 선택해 다른 제도 설명이 섞이지 않게 합니다.
@@ -1046,16 +1046,16 @@ def apply_policy_rules_node(state: ConsultationState):
     if marriage_answer or seungjungsang_answer or hoegap_answer or death_answer:
         evidence = [{"file": "경조금 지급기준.md", "score": 1, "text": "경조금 지급기준"}]
     elif housing_exclusion_answer or housing_contract_change_answer or housing_lease_answer or housing_move_answer:
-        evidence = [{"file": "숙소지원금 운영 기준.txt", "score": 1, "text": "숙소지원금 운영 기준"}]
+        evidence = [{"file": "숙소지원금 운영 기준.md", "score": 1, "text": "숙소지원금 운영 기준"}]
     elif relocation_answer:
         evidence = [
-            {"file": "숙소지원금 운영 기준.txt", "score": 1, "text": "숙소지원금 운영 기준"},
-            {"file": "여비관리기준.txt", "score": 1, "text": "여비관리기준"},
+            {"file": "숙소지원금 운영 기준.md", "score": 1, "text": "숙소지원금 운영 기준"},
+            {"file": "여비관리기준.md", "score": 1, "text": "여비관리기준"},
         ]
     elif overseas_personal_return_answer:
         evidence = [{"file": "여비관리 FAQ.md", "score": 1, "text": "해외출장 종료 후 개인 일정 체류"}]
     elif parking_answer or trip_answer:
-        evidence = [{"file": "여비관리기준.txt", "score": 1, "text": "여비관리기준"}]
+        evidence = [{"file": "여비관리기준.md", "score": 1, "text": "여비관리기준"}]
     else:
         evidence = [{"file": "동호회 관리 규정.md", "score": 1, "text": "동호회 관리 규정"}]
     return {"answer": answer, "evidence": evidence}
