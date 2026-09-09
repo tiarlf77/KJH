@@ -229,6 +229,7 @@ def load_policy_index():
                 "stem": path.stem,
                 "path": chunk["path"],
                 "text": chunk["text"],
+                "searchable": searchable,
                 "tokens": tokens(searchable),
                 "bigrams": bigrams(searchable),
             })
@@ -240,10 +241,11 @@ def load_policy_index():
         for token, count in frequency.items()
     }
     average_length = sum(len(chunk["tokens"]) for chunk in chunks) / total if total else 1.0
-    # 본문만 임베딩합니다. 계층 경로는 키워드 검색에서만 사용합니다.
-    embeddings = embed_texts([chunk["text"] for chunk in chunks])
+    # 계층 경로를 본문과 함께 임베딩합니다. "5.2 지원 대상"처럼 본문에 제도명이 없는 청크는
+    # 제목에만 의미가 있어, 본문만 임베딩하면 벡터 점수가 구조적으로 낮게 나옵니다.
+    embeddings = embed_texts([chunk["searchable"] for chunk in chunks])
     for chunk in chunks:
-        chunk["vector"] = embeddings.get(hashlib.sha256(chunk["text"].encode("utf-8")).hexdigest())
+        chunk["vector"] = embeddings.get(hashlib.sha256(chunk["searchable"].encode("utf-8")).hexdigest())
     return chunks, idf, average_length
 
 
