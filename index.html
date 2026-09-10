@@ -46,7 +46,10 @@
     input.placeholder='예: '+examples[Math.floor(Math.random()*examples.length)];
     input.addEventListener('input',()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,130)+'px';send.disabled=!input.value.trim()});
     // 엔터는 전송하고, 여러 줄 질문이 필요할 때는 Shift+Enter를 사용합니다.
-    input.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();if(input.value.trim()&&!send.disabled)form.requestSubmit()}});
+    // 한글 조합 중 엔터는 무시합니다. IME는 조합 확정 전에 Enter를 먼저 보내므로,
+    // 그대로 전송하면 확정된 마지막 글자가 입력창에 남아 다음 엔터에 또 전송됩니다.
+    // keyCode 229는 isComposing이 없는 구형 Safari 대비입니다.
+    input.addEventListener('keydown',event=>{if(event.isComposing||event.keyCode===229)return;if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();if(input.value.trim()&&!send.disabled)form.requestSubmit()}});
     form.addEventListener('submit',async e=>{e.preventDefault();const q=input.value.trim();if(!q)return;addUser(q);conversation.push({role:'user',content:q});input.value='';input.style.height='auto';send.disabled=true;addTyping();const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),50000);try{const response=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,history:conversation.slice(0,-1)}),signal:controller.signal});const data=await response.json();removeTyping();if(!response.ok)throw new Error(data.error||'상담 처리 중 오류가 발생했습니다.');addAnswer(data.answer,data.evidence,data.ui_actions);conversation.push({role:'assistant',content:data.answer})}catch(error){removeTyping();conversation.pop();addError(error.name==='AbortError'?'응답 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.':error.message)}finally{clearTimeout(timeout);send.disabled=false}});
 
     function addUser(text){const empty=chat.querySelector('.empty');if(empty)empty.remove();chat.insertAdjacentHTML('beforeend',`<div class="message user"><div class="avatar">나</div><div class="bubble">${escapeHtml(text)}</div></div>`);window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'})}
