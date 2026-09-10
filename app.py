@@ -65,66 +65,7 @@ QUERY_SYNONYMS = {
     "남편": {"배우자"},
     "부인": {"배우자"},
 }
-OWN_SIBLINGS = ("형", "누나", "언니", "오빠", "남동생", "여동생", "동생", "형제", "자매")
-SPOUSE_SIBLINGS = ("처제", "처형", "처남", "시누이", "시동생", "아주버님", "도련님")
-SPOUSE_CUES = ("배우자", "와이프", "아내", "남편", "부인", "wife", "husband")
-SPECIAL_LEAVE_RELATIONS = ("백숙부모", "백숙부", "매형", "매제", "제부", "형부", "올케")
-AMBIGUOUS_DEATH_RELATIONS = ("고모", "이모", "외삼촌")
-FAMILY_OWNER_WORDS = (
-    "가족", "본인", "배우자", "와이프", "아내", "남편", "부모", "엄마", "아빠", "아버지", "어머니",
-    "자녀", "아들", "딸", "형", "누나", "언니", "오빠", "동생", "형제", "자매",
-)
-LEASE_WORDS = ("전세", "월세", "임대차", "세들어", "세 들어", "계약")
-PROPERTY_WORDS = ("건물", "명의", "소유", "집", "주택")
-COHABITATION_WORDS = ("동거", "같이 살", "함께 살", "와이프와", "아내와", "남편과", "배우자와", "가족과", "자녀와", "아이와", "친구와")
 
-
-def find_workplace(question):
-    """질문에 드러난 사업장을 답변에만 사용합니다."""
-    destination_match = re.search(r"(?:에서|→|->)\s*(포항|광양|세종|서울)\s*(?:로|으로)", question)
-    if destination_match:
-        return destination_match.group(1)
-    for workplace in ("포항", "광양", "세종", "서울"):
-        if workplace in question:
-            return workplace
-    return ""
-
-
-def is_relocation_question(question):
-    """발령에 따른 부임비·이전비·숙소지원금 복합 문의를 식별합니다."""
-    relocation_words = ("발령", "부임", "부임비", "이전비", "이사")
-    return any(word in question for word in relocation_words)
-
-
-def extract_relocation_facts(question):
-    """부임 질문에서 이미 알려진 사실을 뽑아 같은 내용을 재질문하지 않습니다."""
-    compact_question = question.replace(" ", "")
-    not_moving = bool(re.search(r"(?:이사|이전)(?:는|를|가)?(?:하지)?않", compact_question)) or bool(
-        re.search(r"(?:이사|이전)(?:는|를|가)?안", compact_question)
-    )
-    lives_alone = any(word in question for word in ("혼자", "단신", "나만", "본인만"))
-    family_elsewhere = any(word in question for word in ("가족은", "배우자는", "아이들은", "자녀는"))
-    return {
-        "destination": find_workplace(question),
-        "not_moving": not_moving,
-        "lives_alone": lives_alone,
-        "family_elsewhere": family_elsewhere,
-    }
-
-
-def find_family_owner_relation(question):
-    """가족 명의 임대차에서 확인된 소유자 관계를 짧게 표시합니다."""
-    labels = (
-        ("배우자", ("배우자", "와이프", "아내", "남편")),
-        ("부모", ("부모", "엄마", "아빠", "아버지", "어머니")),
-        ("자녀", ("자녀", "아들", "딸")),
-        ("형제·자매", ("형", "누나", "언니", "오빠", "동생", "형제", "자매")),
-        ("가족", ("가족",)),
-    )
-    for label, words in labels:
-        if any(word in question for word in words):
-            return label
-    return "가족"
 
 
 def load_env():
@@ -480,138 +421,6 @@ def conversation_context(question, history):
     return f"\n[대화 맥락 보완]\n{relation}\n{birthday}".strip()
 
 
-def build_sibling_marriage_answer(question):
-    """형제자매 결혼 문의는 규정 기준으로 일관되게 안내합니다."""
-    sibling_words = OWN_SIBLINGS + SPOUSE_SIBLINGS
-    if "결혼" not in question or not any(word in question for word in sibling_words):
-        return ""
-    is_spouse_side = (
-        any(word in question for word in SPOUSE_SIBLINGS)
-        or (any(word in question.lower() for word in SPOUSE_CUES) and any(word in question for word in OWN_SIBLINGS))
-    )
-    if is_spouse_side:
-        relation = "배우자 형제·자매"
-        documents = "본인 가족관계증명서, 배우자 부모 기준 가족관계증명서, 청첩장"
-    else:
-        relation = "본인 형제·자매"
-        documents = "부모 기준 가족관계증명서, 청첩장"
-    return (
-        f"네. {relation} 결혼은 경조금 지급 대상입니다.\n\n"
-        "확인 결과\n"
-        f"- 관계: {relation}\n"
-        "- 지원금: 200,000원\n"
-        f"- 필요 서류: {documents}\n"
-        "- 신청기한: 경조사 사유 발생일로부터 3개월 이내\n\n"
-        "최종 승인·지급은 담당 부서의 서류 검토를 거쳐 결정됩니다."
-    )
-
-
-def build_seungjungsang_answer(question):
-    """승중상은 인정 조건이 확인된 경우에만 지급 기준을 안내합니다."""
-    if "승중상" not in question:
-        return ""
-    confirmed = all(word in question for word in ("아버지", "장손", "상주")) and any(
-        word in question for word in ("돌아가", "사망", "별세")
-    )
-    if not confirmed:
-        return (
-            "승중상은 조부모상에서 부친이 이미 사망해 장손자가 상주를 맡는 경우를 말합니다.\n\n"
-            "확인 결과\n"
-            "- 관계: 승중상 인정 조건 확인 필요\n"
-            "- 확인 사항: 부친 사망 여부, 장손자 여부, 상주 여부\n"
-            "- 필요 서류: 부친 사망 증빙, 본인 가족관계증명서, 상주 확인 자료, 부고장\n\n"
-            "위 조건이 확인되면 경조금 500,000원과 화환·장례용품 지원 여부를 안내할 수 있습니다."
-        )
-    return (
-        "경조금 지급 대상입니다.\n\n"
-        "확인 결과\n"
-        "- 관계: 승중상\n"
-        "- 판정: 지원 대상\n"
-        "- 지원금: 500,000원\n"
-        "- 화환: O\n"
-        "- 장례용품: O\n"
-        "- 필요 서류: 기본증명서(상세, 사망일 표기 확인), 본인 가족관계증명서, 부친 사망 증빙, 장손자·상주 확인 자료, 부고장\n"
-        "- 신청기한: 사유 발생일 당일부터 3개월 이내\n\n"
-        "○ 회사 경조 담당 업체(경조물품,화환 등)\n"
-        "- 현진시닝 : 1600-0113(24시간)\n\n"
-        "최종 승인·지급은 담당 부서의 서류 검토를 거쳐 결정됩니다."
-    )
-
-
-def build_death_answer(question):
-    """사망 경조금 문의를 관계별로 판정해 불필요한 반복 없이 안내합니다."""
-    if not any(word in question for word in ("돌아가", "사망", "별세", "상") ):
-        return ""
-    special_relation = next((word for word in SPECIAL_LEAVE_RELATIONS if word in question), "")
-    if special_relation:
-        documents = "기본증명서(상세, 사망일 표기 확인), 가족관계증명서, 형제 가족관계증명서, 부고장"
-        if special_relation in ("백숙부", "백숙부모"):
-            documents = "기본증명서(상세, 사망일 표기 확인), 아버지 기준 가족관계증명서, 부고장"
-        return (
-            "경조금 지원 대상은 아니며, 경조휴가 2일이 지급됩니다.\n\n"
-            "확인 결과\n"
-            f"- 관계: {special_relation}상\n"
-            "- 경조금: 없음\n"
-            "- 경조휴가: 2일\n"
-            "- 화환: X\n"
-            "- 장례용품: X\n"
-            f"- 필요 서류: {documents}\n\n"
-            "휴가 신청 절차와 서류 인정 범위는 노사발전그룹 검토를 거쳐 결정됩니다."
-        )
-    if any(word in question for word in AMBIGUOUS_DEATH_RELATIONS):
-        return (
-            "질문의 관계는 경조금 지급대상 표에 명시되어 있지 않아 지원금액을 단정할 수 없습니다.\n\n"
-            "확인 결과\n"
-            "- 관계: 가족관계 및 적용 기준 확인 필요\n"
-            "- 판정: 노사발전그룹 검토 필요\n"
-            "- 제출 가능 서류: 기본증명서(상세, 사망일 표기 확인), 가족관계증명서, 관계를 확인할 수 있는 추가 가족관계증명서, 부고장\n\n"
-            "경조금 지급기준에는 해당 관계의 사망 관련 제출서류 기준만 확인됩니다."
-        )
-    asks_items = any(word in question for word in ("물품", "화환", "장례용품", "조화"))
-    relation_amount = (
-        (("시아버지", "시어머니", "장인어른", "장모님", "배우자 부모"), "배우자 부모", "1,000,000원"),
-        (("남편의 아버지", "남편 아버지", "아내의 아버지", "아내 아버지", "와이프 아버지", "배우자의 아버지", "배우자 아버지"), "배우자 부모", "1,000,000원"),
-        (("남편의 어머니", "남편 어머니", "아내의 어머니", "아내 어머니", "와이프 어머니", "배우자의 어머니", "배우자 어머니"), "배우자 부모", "1,000,000원"),
-        (("외할아버지", "외할아버님", "외할머니", "외할매", "외조부모"), "본인 외조부모", "300,000원"),
-        (("아버지", "어머니", "엄마", "아빠", "본인 부모"), "본인 부모", "1,000,000원"),
-        (("자녀", "아들", "딸"), "자녀", "1,000,000원"),
-        (("조부모", "할아버지", "할머니"), "본인 및 배우자 조부모", "300,000원"),
-        (("형제", "자매", "오빠", "언니", "누나", "형", "동생", "처남", "처제", "처형", "시누이", "시동생"), "본인 및 배우자 형제·자매", "300,000원"),
-        (("배우자", "아내", "남편", "와이프"), "배우자", "2,000,000원"),
-        (("본인",), "본인", "5,000,000원"),
-    )
-    for words, relation, amount in relation_amount:
-        if any(word in question for word in words):
-            opening = (
-                f"네. {relation} 사망 시 경조 지원 물품을 신청할 수 있습니다."
-                if asks_items else "경조금 지급 대상입니다."
-            )
-            item_line = ""
-            # 사망 경조금 답변에는 질문 표현과 관계없이 규정의 물품 지급 여부를 표시합니다.
-            wreath = "X" if relation == "본인 및 배우자 형제·자매" else "O"
-            supplies = "O" if relation in ("본인", "배우자", "본인 부모", "배우자 부모", "자녀") else "X"
-            item_line = f"- 화환: {wreath}\n- 장례용품: {supplies}\n"
-            documents = "기본증명서(상세, 사망일 표기 확인), 본인 가족관계증명서, 부고장"
-            if relation == "본인 및 배우자 조부모":
-                documents = "기본증명서(상세, 사망일 표기 확인), 아버지 기준 가족관계증명서, 부고장"
-            elif relation == "본인 외조부모":
-                documents = "기본증명서(상세, 사망일 표기 확인), 어머니 기준 가족관계증명서, 부고장"
-            elif relation == "배우자 부모":
-                documents = "기본증명서(상세, 사망일 표기 확인), 배우자 기준 가족관계증명서, 부고장"
-            return (
-                f"{opening}\n\n"
-                "확인 결과\n"
-                f"- 관계: {relation}\n"
-                "- 판정: 지원 대상\n"
-                f"- 지원금: {amount}\n"
-                f"{item_line}"
-                f"- 필요 서류: {documents}\n\n"
-                "○ 회사 경조 담당 업체(경조물품,화환 등)\n"
-                "- 현진시닝 : 1600-0113(24시간)\n\n"
-                "최종 승인·지급은 담당 부서의 서류 검토를 거쳐 결정됩니다."
-            )
-    return ""
-
 
 def build_clarification_answer(question):
     """제도 유형을 알 수 없는 질문에 전체 상담 범위와 재질문 형식을 안내합니다."""
@@ -637,125 +446,6 @@ def build_unknown_policy_answer(question):
     )
 
 
-def build_housing_exclusion_answer(question):
-    """가족 명의 임대차와 실제 동거는 숙소지원금 지급 제외로 우선 판정합니다."""
-    has_family_lease = (
-        any(word in question for word in FAMILY_OWNER_WORDS)
-        and any(word in question for word in LEASE_WORDS)
-        and any(word in question for word in PROPERTY_WORDS)
-    )
-    has_cohabitation = any(word in question for word in COHABITATION_WORDS)
-    if not has_family_lease and not has_cohabitation:
-        return ""
-    reasons = []
-    if has_family_lease:
-        relation = find_family_owner_relation(question)
-        reasons.append(f"- 임대차: {relation} 명의 건물에 전세·월세 계약")
-    if has_cohabitation:
-        reasons.append("- 실제 거주 형태: 단신부임 기준에 맞지 않는 동거")
-    reason_text = "\n".join(reasons)
-    return (
-        "숙소지원금 지원 대상이 아닙니다.\n\n"
-        "확인 결과\n"
-        f"{reason_text}\n"
-        "- 판정: 지원 불가\n"
-        "- 숙소지원금: 없음\n\n"
-        "가족 명의 건물에 전세·월세로 거주하거나 단신부임 신청 후 실제 동거하는 경우는 숙소지원금 지급 제외 기준입니다. "
-        "신청 내용이나 실제 거주 형태가 사실과 다르면 윤리위반으로 감사 대상이 될 수 있습니다."
-    )
-
-
-def build_housing_contract_change_answer(question):
-    """기존 수급자의 월세·전세 전환은 변경 계약 기준과 증빙을 안내합니다."""
-    if not ("월세" in question and "전세" in question):
-        return ""
-    if not any(word in question for word in ("바꾸", "변경", "전환", "바뀌", "받고", "수급")):
-        return ""
-    monthly_first = question.find("월세") < question.find("전세")
-    if monthly_first:
-        change = "월세 → 전세"
-        standard = "전세금 10,000,000원당 월 100,000원"
-        documents = "변경된 임대차계약서, 계약조건 확인 자료"
-        opening = "월세와 전세 간 계약 형태가 변경되면, 변경된 계약 기준으로 숙소지원금을 산정하기 위해 관련 증빙서류를 새로 제출해야 합니다."
-    else:
-        change = "전세 → 월세"
-        standard = "월 차임만 지원하며 관리비·공과금은 제외"
-        documents = "변경된 임대차계약서, 월세 이체내역, 계약조건 확인 자료"
-        opening = "전세와 월세 간 계약 형태가 변경되면, 변경된 계약 기준으로 숙소지원금을 산정하기 위해 관련 증빙서류를 새로 제출해야 합니다."
-    return (
-        f"{opening}\n\n"
-        "확인 결과\n"
-        f"- 변경 내용: {change}\n"
-        "- 필요 조치: 변경된 임대차계약서와 계약조건 확인 자료 제출\n"
-        f"- 변경 후 지원 기준: {standard}\n"
-        "- 지원 산정: 변경된 계약 형태 기준으로 재산정\n"
-        f"- 필요 서류: {documents}\n\n"
-        "세부 제출서류와 적용 시점은 숙소지원금 담당자에게 문의해 주세요."
-    )
-
-
-def build_relocation_answer(question):
-    """부임비·이전비와 숙소지원금을 질문 의도에 맞춰 함께 안내합니다."""
-    if not is_relocation_question(question):
-        return ""
-    facts = extract_relocation_facts(question)
-    destination = facts["destination"]
-    if not destination:
-        return (
-            "발령에 따른 부임비·이전비와 숙소지원금은 각각 기준이 다릅니다.\n\n"
-            "확인 결과\n"
-            "- 부임비·이전비: 실제 이사 여부에 따라 판단\n"
-            "- 숙소지원금: 새 근무지, 실제 단신 거주, 주택 보유 여부에 따라 판단\n\n"
-            "발령받은 근무지역과 이사 여부를 알려주시면 적용되는 지원만 안내해 드리겠습니다."
-        )
-    is_seoul = destination == "서울"
-    housing_amount = "월 600,000원" if is_seoul else "월 400,000원"
-    housing_line = f"- 숙소지원금 기준: {destination} 신규 부임 시 {housing_amount}, 발령일로부터 최대 3년\n"
-    if facts["not_moving"]:
-        opening = "이사를 하지 않으면 부임비와 이전비는 지급되지 않습니다."
-        moving_line = "- 부임비·이전비: 이사하지 않으면 지급 없음\n"
-    else:
-        opening = "부임비와 이전비는 실제 이사 여부와 이사·중개 비용 증빙을 기준으로 판단합니다."
-        moving_line = "- 부임비·이전비: 실제 이사 여부와 이사·중개 비용 증빙을 기준으로 판단\n"
-    residence_line = "- 거주 계획: 본인이 새 근무지에서 혼자 거주 예정\n" if facts["lives_alone"] else ""
-    if facts["family_elsewhere"]:
-        residence_line += "- 가족 거주지: 기존 지역에 거주 예정\n"
-    next_question = "새 근무지 숙소의 임대차계약 여부와 본인·배우자 주택 보유 여부를 알려주시면 숙소지원금 가능 여부를 확인해 드리겠습니다."
-    return (
-        f"{opening} 다만 {destination}에 별도 숙소를 구해 실제로 혼자 거주한다면 숙소지원금 대상 여부를 검토할 수 있습니다.\n\n"
-        "확인 결과\n"
-        f"- 신규 부임지: {destination}\n"
-        f"{moving_line}"
-        f"{residence_line}"
-        f"{housing_line}"
-        "- 숙소지원금 확인 조건: 새 근무지 주택 보유 여부, 실제 단신 거주 여부, 타지역 생활근거지, 임대차계약서\n"
-        "- 신청기한: 발령일이 속한 달의 다음 달부터 6개월 이내\n\n"
-        f"{next_question}"
-    )
-
-
-def build_overseas_personal_return_answer(question):
-    """해외출장 후 개인 일정에 따른 귀국 항공편은 지급 불가로 안내합니다."""
-    compact_question = question.replace(" ", "")
-    is_overseas_trip = "해외출장" in compact_question
-    has_personal_leave = any(word in question for word in ("개인휴가", "개인 휴가", "개인 일정", "연차", "휴가"))
-    is_delayed_return = any(word in question for word in ("복귀", "귀국", "입국", "돌아오", "돌아가", "들어오", "와도"))
-    asks_airfare = any(word in question for word in ("항공", "비행기", "항공권", "항공편", "교통비", "티켓"))
-    if not (is_overseas_trip and has_personal_leave and is_delayed_return and asks_airfare):
-        return ""
-    return (
-        "개인 연차나 휴가를 사용하여 해외출장 일정 종료 후 체류한 뒤 귀국하는 항공편은 "
-        "회사에서 지원하지 않습니다.\n\n"
-        "확인 결과\n"
-        "- 복귀 원칙: 회사가 승인한 해외출장 일정 내 귀국\n"
-        "- 출장 종료 후 체류: 개인 연차·휴가 또는 개인 여행\n"
-        "- 항공편: 개인 일정으로 변경된 귀국 항공편은 지원하지 않음\n"
-        "- 개인 부담: 귀국 항공료, 운임 차액 및 변경 수수료\n"
-        "- 근태: 개인 연차·휴가와 추가 체류 기간은 별도 근태 승인 필요\n"
-        "- 판정: 지급 불가\n\n"
-        "승인된 해외출장 일정 내 귀국 항공편을 이용해 주세요. 업무상 사유로 귀국 일정 변경이 "
-        "필요한 경우에만 변경 전에 출장 승인권자와 노무관리 주관부서의 승인을 받아야 합니다."
-    )
 
 
 def is_club_application_question(question):
@@ -1050,50 +740,6 @@ def analyze_question_node(state: ConsultationState):
     return {"analysis": judge_groundedness(question, state.get("evidence", []), state.get("history", []))}
 
 
-def rule_applies(analysis, *domains):
-    """의도를 못 뽑았으면 기존 판별을 쓰고, 뽑았으면 해당 제도일 때만 규칙을 켭니다."""
-    intent = (analysis or {}).get("intent")
-    return intent is None or intent in domains
-
-
-def apply_policy_rules_node(state: ConsultationState):
-    """날짜·관계·금액처럼 규정으로 결정 가능한 항목을 우선 처리합니다."""
-    question = state["question"]
-    analysis = state.get("analysis") or {}
-    relation = analysis.get("relation") or ""
-    ceremony = rule_applies(analysis, "ceremony")
-    # 관계를 못 뽑았으면 형제·자매로 단정하지 않습니다. "유형"의 '형'처럼 부분문자열만 걸린
-    # 질문에 20만원 지급을 확정해 버리기 때문에, 판정이 관계를 명시했을 때만 규칙을 켭니다.
-    sibling_case = ceremony and ("형제" in relation or "자매" in relation)
-    marriage_answer = build_sibling_marriage_answer(question) if sibling_case else ""
-    seungjungsang_answer = build_seungjungsang_answer(question) if ceremony else ""
-    death_answer = build_death_answer(question) if ceremony else ""
-    housing = rule_applies(analysis, "housing")
-    housing_exclusion_answer = build_housing_exclusion_answer(question) if housing else ""
-    housing_contract_change_answer = build_housing_contract_change_answer(question) if housing else ""
-    relocation_answer = build_relocation_answer(question) if rule_applies(analysis, "relocation") else ""
-    overseas_personal_return_answer = build_overseas_personal_return_answer(question) if rule_applies(analysis, "trip") else ""
-    answer = marriage_answer or seungjungsang_answer or death_answer or housing_exclusion_answer or housing_contract_change_answer or relocation_answer or overseas_personal_return_answer
-    if not answer:
-        return {}
-    if marriage_answer or seungjungsang_answer or death_answer:
-        evidence = [{"file": "경조금 지급기준.md", "score": 1, "text": "경조금 지급기준"}]
-    elif housing_exclusion_answer or housing_contract_change_answer:
-        evidence = [{"file": "숙소지원금 운영 기준.md", "score": 1, "text": "숙소지원금 운영 기준"}]
-    elif relocation_answer:
-        evidence = [
-            {"file": "숙소지원금 운영 기준.md", "score": 1, "text": "숙소지원금 운영 기준"},
-            {"file": "여비관리기준.md", "score": 1, "text": "여비관리기준"},
-        ]
-    else:
-        evidence = [{"file": "여비관리 FAQ.md", "score": 1, "text": "해외출장 종료 후 개인 일정 체류"}]
-    return {"answer": answer, "evidence": evidence}
-
-
-def choose_after_rules(state: ConsultationState):
-    """결정 규칙으로 처리하지 못한 질문만 LLM 답변 단계로 보냅니다."""
-    return "end" if state.get("answer") else "generate"
-
 
 def build_clarify_answer(missing, finding=""):
     """확정된 사실을 먼저 알리고, 판정이 짚은 부족한 정보만 되묻습니다.
@@ -1168,19 +814,18 @@ def generate_answer_node(state: ConsultationState):
 
 
 def build_consultation_graph():
-    """상담 요청을 분류·검색·규칙판정·생성으로 연결한 LangGraph를 만듭니다."""
+    """상담 요청을 재작성·검색·판정·생성으로 연결한 LangGraph를 만듭니다."""
     graph = StateGraph(ConsultationState)
     graph.add_node("resolve", resolve_question_node)
     graph.add_node("retrieve", retrieve_policy_node)
     graph.add_node("analyze", analyze_question_node)
-    graph.add_node("rules", apply_policy_rules_node)
     graph.add_node("generate", generate_answer_node)
-    # 키워드로 미리 거르지 않고 모든 질문을 검색·판정에 태웁니다.
+    # 규정 본문을 파이썬 문자열로 들고 있던 rules 노드는 지웠습니다. 답이 규정과 어긋나면
+    # 고정 문구를 고치는 대신 검색·판정을 고칩니다. 모든 질문이 같은 경로를 지납니다.
     graph.add_edge(START, "resolve")
     graph.add_edge("resolve", "retrieve")
     graph.add_edge("retrieve", "analyze")
-    graph.add_edge("analyze", "rules")
-    graph.add_conditional_edges("rules", choose_after_rules, {"end": END, "generate": "generate"})
+    graph.add_edge("analyze", "generate")
     graph.add_edge("generate", END)
     return graph.compile()
 
