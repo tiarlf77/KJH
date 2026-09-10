@@ -236,6 +236,12 @@ EVIDENCE_CASES = [
 ]
 
 
+CLUB_SCOPE_CASES = [
+    ("낚시 동호회 개설 가능한가요?", "낚시"),
+    ("헬스 동아리 만들어도 되나요?", "헬스"),
+]
+
+
 def check_continuity(question, history, required_texts, forbidden_texts):
     """후속 입력이 자립형 질문으로 다시 쓰이는지 확인합니다."""
     resolved = resolve_question(question, history)
@@ -255,6 +261,17 @@ def check_evidence(question, resolved, intent, expected_files, forbidden_files):
     files = {item["file"] for item in evidence}
     assert files == expected_files, f"근거 파일이 다릅니다: {sorted(files)!r}"
     assert not files & forbidden_files, f"무관한 근거 파일이 포함됐습니다: {sorted(files & forbidden_files)!r}"
+
+
+def check_club_scope(question, required_term):
+    """동호회·동아리 질문이 분야별 운영 기준이 담긴 근거를 찾는지 확인합니다."""
+    result = retrieve_policy_node({"question": question, "resolved": question})
+    evidence = result["evidence"]
+    files = {item["file"] for item in evidence}
+    assert files == {"동호회 관리 규정.md"}, f"근거 파일이 다릅니다: {sorted(files)!r}"
+    assert any(required_term in item["text"] for item in evidence), (
+        f"분야별 운영 기준에 {required_term!r}가 포함되지 않았습니다."
+    )
 
 
 def check_case(question, required_text, forbidden_text, history=()):
@@ -307,13 +324,15 @@ def main():
     unresolved = run_cases("B", KNOWN_FAILURE_CASES)
     continuity = run_cases("C", CONTINUITY_CASES, check_continuity)
     evidence = run_cases("D", EVIDENCE_CASES, check_evidence)
-    total = tuple(sum(values) for values in zip(protected, unresolved, continuity, evidence))
+    club_scope = run_cases("E", CLUB_SCOPE_CASES, check_club_scope)
+    total = tuple(sum(values) for values in zip(protected, unresolved, continuity, evidence, club_scope))
 
     print()
     print(f"(A) 지켜야 할 동작: 통과 {protected[0]} / 실패 {protected[1]} / 건너뜀 {protected[2]}")
     print(f"(B) 아직 미해결: 통과 {unresolved[0]} / 실패 {unresolved[1]} / 건너뜀 {unresolved[2]}")
     print(f"(C) 대화 연속성: 통과 {continuity[0]} / 실패 {continuity[1]} / 건너뜀 {continuity[2]}")
     print(f"(D) 근거 링크 적합성: 통과 {evidence[0]} / 실패 {evidence[1]} / 건너뜀 {evidence[2]}")
+    print(f"(E) 동호회 분야 기준 검색: 통과 {club_scope[0]} / 실패 {club_scope[1]} / 건너뜀 {club_scope[2]}")
     print(f"전체: 통과 {total[0]} / 실패 {total[1]} / 건너뜀 {total[2]}")
     raise SystemExit(1 if total[1] else 0)
 

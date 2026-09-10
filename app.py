@@ -330,7 +330,7 @@ def focused_evidence_files(question):
         return {"여비관리기준.md"}
     if any(word in question for word in ("숙소", "숙소지원금", "전세", "월세", "임대차")):
         return {"숙소지원금 운영 기준.md"}
-    if "동호회" in question:
+    if any(word in question for word in ("동호회", "동아리", "동호인")):
         return {"동호회 관리 규정.md"}
     if any(word in question for word in ("경조금", "조의금", "축의금", "경조사", "장례", "부고", "결혼", "회갑", "환갑", "출산", "사망", "돌아가", "별세", "승중상")):
         return {"경조금 지급기준.md"}
@@ -395,9 +395,22 @@ def retrieve(question, limit=20, focus_question=None):
     results = [item for item in results if item["file"] in top_files]
     selected = []
     taken = set()
+    # 질문에만 등장하는 희소 종목어가 조항 본문에 있으면, 의미 유사도 순위와 관계없이
+    # 해당 조항을 근거에 남깁니다. 예: "낚시 동호회", "헬스 동아리".
+    rare_query_terms = {
+        term for term in query_tokens
+        if len(term) >= 2 and idf.get(term, 0) >= 2.0
+    }
+    for item in results:
+        if not any(term in item["text"] for term in rare_query_terms):
+            continue
+        selected.append(item)
+        taken.add((item["file"], item["path"]))
     # 여러 규정이 함께 적용될 수 있으므로 규정별 상위 근거를 먼저 확보합니다.
     for path in sorted({item["file"] for item in results}):
         for item in [item for item in results if item["file"] == path][:3]:
+            if (item["file"], item["path"]) in taken:
+                continue
             selected.append(item)
             taken.add((item["file"], item["path"]))
     # 관련 규정이 하나뿐이면 파일별 상한 탓에 근거가 3건으로 잘리므로 남은 자리를 채웁니다.
