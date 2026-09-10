@@ -266,6 +266,13 @@ def cosine(left, right):
 
 
 # 코퍼스가 작아 후보를 넓게 주고, 어떤 조항이 답인지는 판정 단계에서 가립니다.
+# 낱말로 근거 파일을 미리 좁히던 `focused_evidence_files`는 지웠습니다. 측정하면 전 지표가
+# 나빠집니다(44문항 MRR 0.760 -> 0.685, 미검색 2 -> 6건). "출장 가면 숙소는 회사가
+# 잡아주나요?"는 '숙소'가 걸려 숙소지원금 기준에 갇히지만 답은 여비관리기준에 있습니다.
+# 제도 섞임은 낱말이 아니라 점수로 가리는 TOP_FILE_SCORE_RATIO가 이미 맡고 있습니다.
+# 후보를 지우는 키워드 규칙은 해롭고, 더하는 확장(rare_query_terms)은 값을 합니다.
+
+
 def retrieve(question, limit=20):
     """Markdown 제목 청크와 기존 텍스트 규정에서 관련 근거를 찾아 반환합니다."""
     query_tokens = tokens(question)
@@ -319,9 +326,22 @@ def retrieve(question, limit=20):
     results = [item for item in results if item["file"] in top_files]
     selected = []
     taken = set()
+    # 질문에만 등장하는 희소 종목어가 조항 본문에 있으면, 의미 유사도 순위와 관계없이
+    # 해당 조항을 근거에 남깁니다. 예: "낚시 동호회", "헬스 동아리".
+    rare_query_terms = {
+        term for term in query_tokens
+        if len(term) >= 2 and idf.get(term, 0) >= 2.0
+    }
+    for item in results:
+        if not any(term in item["text"] for term in rare_query_terms):
+            continue
+        selected.append(item)
+        taken.add((item["file"], item["path"]))
     # 여러 규정이 함께 적용될 수 있으므로 규정별 상위 근거를 먼저 확보합니다.
     for path in sorted({item["file"] for item in results}):
         for item in [item for item in results if item["file"] == path][:3]:
+            if (item["file"], item["path"]) in taken:
+                continue
             selected.append(item)
             taken.add((item["file"], item["path"]))
     # 관련 규정이 하나뿐이면 파일별 상한 탓에 근거가 3건으로 잘리므로 남은 자리를 채웁니다.

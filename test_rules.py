@@ -1,6 +1,12 @@
 """복리후생 상담 규칙의 사용자 관점 동작을 고정하는 회귀 테스트입니다."""
 
-from app import CONSULTATION_GRAPH, attach_referenced_chunks, load_env, resolve_question
+from app import (
+    CONSULTATION_GRAPH,
+    attach_referenced_chunks,
+    load_env,
+    resolve_question,
+    retrieve_policy_node,
+)
 
 # 키를 읽지 않으면 LLM 경로 사례가 전부 담당 부서 이관으로 떨어져 검증이 되지 않습니다.
 load_env()
@@ -210,6 +216,41 @@ CONTINUITY_CASES = [
 ]
 
 
+# 검색과 규칙 답변 단계를 지난 뒤에도 현재 제도와 무관한 규정 링크가 남지 않아야 합니다.
+EVIDENCE_CASES = [
+    (
+        "해외출장 전일 이동으로 보면 됩니다",
+        (
+            "9월 11일부터 9월 14일까지 수도권에 체류한 뒤 9월 14일 인천공항으로 이동하는 "
+            "일정을 해외출장 전일 이동으로 볼 때, 숙소지원금 운영 기준과 해외출장 비용을 어떻게 적용하나요?"
+        ),
+        "trip",
+        {"여비관리기준.md"},
+        {"여비관리 FAQ.md", "숙소지원금 운영 기준.md", "경조금 지급기준.md"},
+    ),
+    (
+        "해외출장 종료 후 개인 휴가로 이틀 더 머물렀는데 귀국 항공권 변경 비용도 회사가 부담하나요?",
+        "해외출장 종료 후 개인 휴가로 이틀 더 머문 뒤 귀국 항공권 변경 비용의 회사 부담 여부",
+        "trip",
+        {"여비관리기준.md"},
+        {"여비관리 FAQ.md", "숙소지원금 운영 기준.md", "경조금 지급기준.md"},
+    ),
+    (
+        "조의금 신청 시 가족관계증명서를 즉시 제출하기 어려워도, 사실관계를 증명할 수 있는 다른 서류가 있으면 대체 인정될 수 있나요?",
+        "조의금 신청 시 가족관계증명서를 대체할 수 있는 증빙서류",
+        "ceremony",
+        {"경조금 지급기준.md"},
+        {"여비관리 FAQ.md", "숙소지원금 운영 기준.md", "동호회 관리 규정.md"},
+    ),
+]
+
+
+CLUB_SCOPE_CASES = [
+    ("낚시 동호회 개설 가능한가요?", "낚시"),
+    ("헬스 동아리 만들어도 되나요?", "헬스"),
+]
+
+
 def check_continuity(question, history, required_texts, forbidden_texts):
     """후속 입력이 자립형 질문으로 다시 쓰이는지 확인합니다."""
     resolved = resolve_question(question, history)
@@ -218,6 +259,31 @@ def check_continuity(question, history, required_texts, forbidden_texts):
         assert text in resolved, f"이전 대화의 사실이 빠졌습니다: {text!r} / 결과: {resolved!r}"
     for text in forbidden_texts:
         assert text not in resolved, f"무관한 주제가 딸려왔습니다: {text!r} / 결과: {resolved!r}"
+
+
+def check_evidence(question, resolved, intent, expected_files, forbidden_files):
+    """검색 뒤에 현재 제도와 무관한 규정 링크가 남지 않는지 확인합니다.
+
+    원래는 `apply_policy_rules_node`를 함께 태워 규칙이 덮어쓴 근거까지 봤습니다. 그 노드는
+    규정 본문을 파이썬 문자열로 들고 있어 삭제했고, 규칙이 근거를 덮어쓰는 경로 자체가
+    없어졌습니다. 검증하려던 것(무관한 파일이 근거에 남지 않는다)은 검색 결과로 그대로 봅니다.
+    intent는 규칙을 켜는 데만 쓰였으므로 더 이상 필요하지 않습니다.
+    """
+    evidence = retrieve_policy_node({"question": question, "resolved": resolved})["evidence"]
+    files = {item["file"] for item in evidence}
+    assert files == expected_files, f"근거 파일이 다릅니다: {sorted(files)!r}"
+    assert not files & forbidden_files, f"무관한 근거 파일이 포함됐습니다: {sorted(files & forbidden_files)!r}"
+
+
+def check_club_scope(question, required_term):
+    """동호회·동아리 질문이 분야별 운영 기준이 담긴 근거를 찾는지 확인합니다."""
+    result = retrieve_policy_node({"question": question, "resolved": question})
+    evidence = result["evidence"]
+    files = {item["file"] for item in evidence}
+    assert files == {"동호회 관리 규정.md"}, f"근거 파일이 다릅니다: {sorted(files)!r}"
+    assert any(required_term in item["text"] for item in evidence), (
+        f"분야별 운영 기준에 {required_term!r}가 포함되지 않았습니다."
+    )
 
 
 def check_case(question, required_text, forbidden_text, history=()):
@@ -293,12 +359,16 @@ def main():
     protected = run_cases("A", PROTECTED_CASES)
     unresolved = run_cases("B", KNOWN_FAILURE_CASES)
     continuity = run_cases("C", CONTINUITY_CASES, check_continuity)
-    total = tuple(sum(values) for values in zip(protected, unresolved, continuity))
+    evidence = run_cases("D", EVIDENCE_CASES, check_evidence)
+    club_scope = run_cases("E", CLUB_SCOPE_CASES, check_club_scope)
+    total = tuple(sum(values) for values in zip(protected, unresolved, continuity, evidence, club_scope))
 
     print()
     print(f"(A) 지켜야 할 동작: 통과 {protected[0]} / 실패 {protected[1]} / 건너뜀 {protected[2]}")
     print(f"(B) 아직 미해결: 통과 {unresolved[0]} / 실패 {unresolved[1]} / 건너뜀 {unresolved[2]}")
     print(f"(C) 대화 연속성: 통과 {continuity[0]} / 실패 {continuity[1]} / 건너뜀 {continuity[2]}")
+    print(f"(D) 근거 링크 적합성: 통과 {evidence[0]} / 실패 {evidence[1]} / 건너뜀 {evidence[2]}")
+    print(f"(E) 동호회 분야 기준 검색: 통과 {club_scope[0]} / 실패 {club_scope[1]} / 건너뜀 {club_scope[2]}")
     print(f"전체: 통과 {total[0]} / 실패 {total[1]} / 건너뜀 {total[2]}")
     raise SystemExit(1 if total[1] else 0)
 
