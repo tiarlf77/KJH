@@ -6,7 +6,8 @@ from app import CONSULTATION_GRAPH, load_env
 load_env()
 
 
-# (질문, 답변에 있어야 할 문자열, 답변에 없어야 할 문자열)
+# (질문, 답변에 있어야 할 문자열, 답변에 없어야 할 문자열[, 이전 대화 이력])
+# 이력은 이전 주제가 새 질문을 덮어쓰는지 보는 사례에만 붙입니다.
 PROTECTED_CASES = [
     # 경조금 지급기준 5.2·5.3: 본인 형제·자매 결혼은 20만원과 부모 기준 증빙을 안내한다.
     (
@@ -71,9 +72,10 @@ PROTECTED_CASES = [
         "발령일로부터 3년간",
     ),
     # 숙소지원금 운영 기준 5.1-4: 매월 15일 이후 신청자는 다음 달부터 지급한다.
+    # 생성 답변은 "다음 달"과 "10월"을 번갈아 쓴다. 낱말이 아니라 어느 달부터인지가 판정이다.
     (
         "9월 20일에 숙소지원금 신청하면 9월분부터 나오나요?",
-        "다음 달",
+        ("10월", "다음 달"),
         "9월분부터 지급",
     ),
     # 숙소지원금 운영 기준 5.5: 월세에서 전세 전환 시 전세금 1천만원당 월 10만원 기준을 쓴다.
@@ -123,6 +125,18 @@ PROTECTED_CASES = [
         "25km",
         "기존 숙소지원금 수급 중",
     ),
+    # 경조금 지급기준 5.2: 앞선 환갑 대화가 남아 있어도 새 부모상 문의는 사망 기준으로 답한다.
+    # 삭제한 build_hoegap_answer가 "부모님"이라는 낱말만 보고 이전 회갑 주제를 이어받아,
+    # 100만원 대상자에게 환갑 20만원 안내를 반환하며 그래프를 끝내던 사례다.
+    (
+        "부모님 상당했는데 지원 가능한가요",
+        "1,000,000원",
+        "환갑",
+        [
+            {"role": "user", "content": "부모님 환갑 경조금 얼마야?"},
+            {"role": "assistant", "content": "환갑(회갑) 경조금 기준은 만 60세가 되는 경우이며, 지원금은 200,000원입니다."},
+        ],
+    ),
 ]
 
 
@@ -157,13 +171,15 @@ KNOWN_FAILURE_CASES = [
 ]
 
 
-def check_case(question, required_text, forbidden_text):
+def check_case(question, required_text, forbidden_text, history=()):
     """전체 상담 그래프에서 필수·금지 문구를 확인합니다."""
-    result = CONSULTATION_GRAPH.invoke({"question": question, "history": []})
+    result = CONSULTATION_GRAPH.invoke({"question": question, "history": list(history)})
     answer = result.get("answer", "")
     assert answer, "답변이 비어 있습니다."
     if required_text:
-        assert required_text in answer, f"필수 문자열이 없습니다: {required_text!r}"
+        # 같은 판정을 다른 낱말로 쓰는 경우가 있어(다음 달/10월, 최장/최대) 대안을 튜플로 받습니다.
+        options = required_text if isinstance(required_text, tuple) else (required_text,)
+        assert any(option in answer for option in options), f"필수 문자열이 없습니다: {options!r}"
     if forbidden_text:
         assert forbidden_text not in answer, f"금지 문자열이 포함됐습니다: {forbidden_text!r}"
 
@@ -171,10 +187,10 @@ def check_case(question, required_text, forbidden_text):
 def run_cases(group, cases):
     """한 그룹의 모든 사례를 실행하고 개별 결과와 합계를 반환합니다."""
     passed = failed = skipped = 0
-    for index, (question, required_text, forbidden_text) in enumerate(cases, 1):
+    for index, (question, required_text, forbidden_text, *history) in enumerate(cases, 1):
         case_id = f"{group}-{index:02d}"
         try:
-            check_case(question, required_text, forbidden_text)
+            check_case(question, required_text, forbidden_text, *history)
         except RuntimeError as error:
             if "OPENAI_API_KEY" in str(error):
                 skipped += 1

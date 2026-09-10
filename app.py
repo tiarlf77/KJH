@@ -480,82 +480,6 @@ def conversation_context(question, history):
     return f"\n[대화 맥락 보완]\n{relation}\n{birthday}".strip()
 
 
-def identify_parent_relation(text):
-    """회갑 검토에 필요한 부모 관계를 정해진 표현으로 분류합니다."""
-    if any(word in text for word in ("배우자 어머니", "배우자 엄마", "배우자 아버지", "장모님", "장인어른", "시어머니", "시아버지")):
-        return "배우자 부모"
-    if any(word in text for word in ("우리 엄마", "우리 어머니", "우리 아버지", "우리 부모님", "엄마", "어머니", "아빠", "아버지", "부모님")):
-        return "본인 부모"
-    return ""
-
-
-def build_hoegap_answer(question, history):
-    """관계와 생년월일이 확인된 회갑 문의에는 일관된 검토 양식을 반환합니다."""
-    prior_text = " ".join(item.get("content", "") for item in (history or [])[-6:])
-    # 새 질문에 값이 있으면 반드시 이전 대화보다 우선합니다.
-    current_relation = identify_parent_relation(question)
-    current_birth = extract_birth_date(question)
-    relation = current_relation or identify_parent_relation(prior_text)
-    birth = current_birth or extract_birth_date(prior_text)
-    # 이전 회갑 대화는 생년월일·부모 관계처럼 명확한 후속 입력일 때만 이어받습니다.
-    is_hoegap = (
-        any(term in question for term in HOEGAP_TERMS)
-        or ("경조금" in question and current_relation and current_birth)
-        or (any(term in prior_text for term in HOEGAP_TERMS) and (current_relation or current_birth))
-    )
-    if not is_hoegap:
-        return ""
-    # '올해 환갑 몇 년생'처럼 일반 기준을 묻는 질문은 관계·개인 생년월일 없이 바로 답합니다.
-    if not birth and (
-        any(word in question for word in ("몇년생", "몇 년생", "생년", "대상"))
-        or ("올해" in question and any(term in question for term in HOEGAP_TERMS))
-    ):
-        return (
-            f"{date.today().year}년 기준 환갑 대상은 원칙적으로 {date.today().year - 60}년생입니다. "
-            "정확한 판단은 생일이 지났는지와 대상이 본인 부모 또는 배우자 부모인지 함께 확인해야 합니다.\n\n"
-            "경조금은 만 60세가 되는 날부터 3개월 이내 신청할 수 있으며, 지원금은 200,000원입니다."
-        )
-    if not relation or not birth:
-        missing = []
-        if not relation:
-            missing.append("대상 관계(본인 부모인지 배우자 부모인지)")
-        if not birth:
-            missing.append("부모님의 생년월일(YYYYMMDD)")
-        return (
-            "환갑(회갑) 경조금 기준은 본인 및 배우자 부모가 만 60세가 되는 경우이며, 지원금은 200,000원입니다.\n\n"
-            "정확한 올해 대상 여부를 계산하려면 "
-            + ", ".join(missing)
-            + "을 알려주세요.\n"
-            "신청은 환갑 사유 발생일로부터 3개월 이내 가능합니다."
-        )
-    today = date.today()
-    sixtieth = date(birth.year + 60, birth.month, birth.day)
-    deadline = add_months(sixtieth, 3)
-    if today < sixtieth:
-        verdict = "회갑 사유 발생일 전"
-        support_line = ""
-        summary = f"회갑 사유 발생일인 {sixtieth.isoformat()}부터 신청 여부를 확인할 수 있습니다."
-    elif today <= deadline:
-        verdict = "신청 가능"
-        support_line = "- 지원금: 200,000원\n"
-        summary = "현재 사유 발생일로부터 3개월 이내이므로 경조금 신청이 가능합니다."
-    else:
-        verdict = "신청 불가"
-        support_line = ""
-        summary = "신청 마감일이 지나 청구권이 소멸되어 경조금 신청이 불가능합니다."
-    return (
-        "확인 결과\n"
-        f"- 관계: {relation}\n"
-        f"- 생년월일: {birth.isoformat()}\n"
-        f"- 회갑 사유 발생일: {sixtieth.isoformat()}\n"
-        f"- 신청 마감일: {deadline.isoformat()}\n"
-        f"- 현재 기준일: {today.isoformat()}\n"
-        f"- 판정: {verdict}\n"
-        f"{support_line}\n"
-        f"{summary}\n최종 승인·지급은 담당 부서의 서류 검토를 거쳐 결정됩니다."
-    )
-
-
 def build_sibling_marriage_answer(question):
     """형제자매 결혼 문의는 규정 기준으로 일관되게 안내합니다."""
     sibling_words = OWN_SIBLINGS + SPOUSE_SIBLINGS
@@ -1066,7 +990,6 @@ def rule_applies(analysis, *domains):
 def apply_policy_rules_node(state: ConsultationState):
     """날짜·관계·금액처럼 규정으로 결정 가능한 항목을 우선 처리합니다."""
     question = state["question"]
-    history = [] if starts_new_policy_topic(question) else state.get("history", [])
     analysis = state.get("analysis") or {}
     relation = analysis.get("relation") or ""
     ceremony = rule_applies(analysis, "ceremony")
@@ -1075,17 +998,16 @@ def apply_policy_rules_node(state: ConsultationState):
     sibling_case = ceremony and ("형제" in relation or "자매" in relation)
     marriage_answer = build_sibling_marriage_answer(question) if sibling_case else ""
     seungjungsang_answer = build_seungjungsang_answer(question) if ceremony else ""
-    hoegap_answer = build_hoegap_answer(question, history) if ceremony else ""
     death_answer = build_death_answer(question) if ceremony else ""
     housing = rule_applies(analysis, "housing")
     housing_exclusion_answer = build_housing_exclusion_answer(question) if housing else ""
     housing_contract_change_answer = build_housing_contract_change_answer(question) if housing else ""
     relocation_answer = build_relocation_answer(question) if rule_applies(analysis, "relocation") else ""
     overseas_personal_return_answer = build_overseas_personal_return_answer(question) if rule_applies(analysis, "trip") else ""
-    answer = marriage_answer or seungjungsang_answer or hoegap_answer or death_answer or housing_exclusion_answer or housing_contract_change_answer or relocation_answer or overseas_personal_return_answer
+    answer = marriage_answer or seungjungsang_answer or death_answer or housing_exclusion_answer or housing_contract_change_answer or relocation_answer or overseas_personal_return_answer
     if not answer:
         return {}
-    if marriage_answer or seungjungsang_answer or hoegap_answer or death_answer:
+    if marriage_answer or seungjungsang_answer or death_answer:
         evidence = [{"file": "경조금 지급기준.md", "score": 1, "text": "경조금 지급기준"}]
     elif housing_exclusion_answer or housing_contract_change_answer:
         evidence = [{"file": "숙소지원금 운영 기준.md", "score": 1, "text": "숙소지원금 운영 기준"}]
