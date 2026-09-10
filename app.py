@@ -336,10 +336,6 @@ def retrieve(question, limit=20):
     query_vector = next(iter(question_vectors.values()), None)
     scored = []
     for chunk in chunks:
-        if chunk["stem"] == "여비관리 FAQ" and not any(
-            word in question for word in ("개인휴가", "개인 휴가", "개인 일정", "연차", "휴가")
-        ):
-            continue
         keyword_score = score_chunk(query_tokens, query_bigrams, chunk, idf, average_length)
         vector_score = 0.0
         if query_vector and chunk.get("vector"):
@@ -368,16 +364,6 @@ def retrieve(question, limit=20):
     results.sort(key=lambda item: item["score"], reverse=True)
     if not results:
         return []
-    # 결혼 문의는 일반적인 '지원' 표현 때문에 다른 복리후생 규정이 섞이지 않게 합니다.
-    if "결혼" in question:
-        results = [item for item in results if Path(item["file"]).stem == "경조금 지급기준"]
-        if not results:
-            return []
-    # 숙소지원금 질문에는 출장·여비 규정이 섞이지 않도록 전용 기준만 사용합니다.
-    if any(word in question for word in ("숙소", "숙소지원금", "주거", "월세", "전세")):
-        results = [item for item in results if Path(item["file"]).stem == "숙소지원금 운영 기준"]
-        if not results:
-            return []
     # 최고 점수에 근접한 규정 파일만 선택해 다른 제도 설명이 섞이지 않게 합니다.
     threshold = results[0]["score"] * TOP_FILE_SCORE_RATIO
     top_files = {item["file"] for item in results if item["score"] >= threshold}
