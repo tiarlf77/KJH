@@ -7,9 +7,12 @@ BIGRAM_WEIGHT·VECTOR_WEIGHT·경로 임베딩 같은 노브를 의견이 아니
 실행: SSL_CERT_FILE=$(python3 -m certifi) python3 eval_retrieval.py
       뒤에 -v를 붙이면 전 문항의 순위를 봅니다.
 
-기준선 (2026-09-10, 본문만 임베딩 / BIGRAM_WEIGHT 1.0 / VECTOR_WEIGHT 0.5):
-    hit@1 44.7%  hit@3 81.6%  hit@5 89.5%  hit@10 97.4%  hit@20 100%  MRR 0.648
+기준선 (2026-09-10, 44문항 / 경로+본문 임베딩 / BIGRAM_WEIGHT 1.0 / VECTOR_WEIGHT 0.5):
+    hit@1 45.5%  hit@3 79.5%  hit@5 90.9%  hit@10 93.2%  hit@20 100%  MRR 0.639
 노브를 바꾼 뒤 이 숫자와 비교하세요. 질문 임베딩도 파일 캐시를 타므로 재실행은 무료입니다.
+
+hit@20이 100%라는 건 판정기가 언제나 정답 조항을 보고 있다는 뜻입니다. 그래서 상위권
+지표는 후보 상한(retrieve의 limit)을 줄이거나 코퍼스가 커질 때 비로소 병목이 됩니다.
 """
 
 import sys
