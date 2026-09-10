@@ -139,6 +139,75 @@ REAL_CASES = [
      ["전체 지원기간에 포함한다"]),
 ]
 
+
+# --- 근거 구성 점검 ---
+# 순위가 아니라 "근거 묶음이 어떤 파일로 구성되는가"를 봅니다. test_rules.py에 있던 것을
+# 옮겨 왔습니다. 원래도 LLM을 쓰지 않고 retrieve()만 부르는데 100초짜리 LLM 회귀에 얹혀
+# 있어서, 노브를 바꿀 때마다 같이 돌려 볼 수가 없었습니다. 여기서는 5초에 함께 돕니다.
+
+# (질문, 검색에 쓸 질문, 근거에 있어야 할 파일, 있으면 안 되는 파일)
+EVIDENCE_CASES = [
+    (
+        "해외출장 전일 이동으로 보면 됩니다",
+        (
+            "9월 11일부터 9월 14일까지 수도권에 체류한 뒤 9월 14일 인천공항으로 이동하는 "
+            "일정을 해외출장 전일 이동으로 볼 때, 숙소지원금 운영 기준과 해외출장 비용을 어떻게 적용하나요?"
+        ),
+        {"여비관리기준.md"},
+        {"여비관리 FAQ.md", "숙소지원금 운영 기준.md", "경조금 지급기준.md"},
+    ),
+    (
+        "해외출장 종료 후 개인 휴가로 이틀 더 머물렀는데 귀국 항공권 변경 비용도 회사가 부담하나요?",
+        "해외출장 종료 후 개인 휴가로 이틀 더 머문 뒤 귀국 항공권 변경 비용의 회사 부담 여부",
+        {"여비관리기준.md"},
+        {"여비관리 FAQ.md", "숙소지원금 운영 기준.md", "경조금 지급기준.md"},
+    ),
+    (
+        "조의금 신청 시 가족관계증명서를 즉시 제출하기 어려워도, 사실관계를 증명할 수 있는 다른 서류가 있으면 대체 인정될 수 있나요?",
+        "조의금 신청 시 가족관계증명서를 대체할 수 있는 증빙서류",
+        {"경조금 지급기준.md"},
+        {"여비관리 FAQ.md", "숙소지원금 운영 기준.md", "동호회 관리 규정.md"},
+    ),
+]
+
+# (질문, 분야별 활동 범위 본문에 있어야 할 종목어)
+# 이 문항들이 rare_query_terms 규칙을 감시하는 유일한 자리입니다. 위 62문항에는 종목
+# 질문이 없어서 그 규칙을 껐다 켜도 지표가 전혀 움직이지 않습니다.
+CLUB_SCOPE_CASES = [
+    ("낚시 동호회 개설 가능한가요?", "낚시"),
+    ("헬스 동아리 만들어도 되나요?", "헬스"),
+]
+
+
+def run_evidence_checks():
+    """근거 파일 구성과 종목어 도달을 확인하고 실패 건수를 반환합니다."""
+    print("[근거 구성] 파일 구성 3문항 · 종목어 도달 2문항")
+    failed = 0
+    for question, resolved, expected, forbidden in EVIDENCE_CASES:
+        files = {item["file"] for item in retrieve(resolved)}
+        if files != expected:
+            failed += 1
+            extra = sorted(files & forbidden)
+            print(f"  실패  {question[:44]}")
+            print(f"        근거 파일 {sorted(files)}")
+            if extra:
+                print(f"        무관한 파일 {extra}")
+        else:
+            print(f"  통과  {question[:44]}")
+    for question, term in CLUB_SCOPE_CASES:
+        evidence = retrieve(question)
+        files = {item["file"] for item in evidence}
+        reached = any(term in item["text"] for item in evidence)
+        if files != {"동호회 관리 규정.md"} or not reached:
+            failed += 1
+            print(f"  실패  {question[:44]}")
+            print(f"        근거 파일 {sorted(files)} / {term!r} 도달 {reached}")
+        else:
+            print(f"  통과  {question[:44]}")
+    print(f"\n실패 {failed}건\n")
+    return failed
+
+
 CUTOFFS = (1, 3, 5, 10, 20)
 
 
@@ -195,6 +264,7 @@ def main():
     # 회귀 세트는 경로 라벨, 실사용 세트는 본문 라벨을 쓴다. 뒤쪽은 청킹을 바꿔도 유효하다.
     run_set("회귀", CASES, "path", verbose)
     run_set("실사용", REAL_CASES, "text", verbose)
+    run_evidence_checks()
 
 
 if __name__ == "__main__":
