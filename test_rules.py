@@ -1,6 +1,12 @@
 """복리후생 상담 규칙의 사용자 관점 동작을 고정하는 회귀 테스트입니다."""
 
-from app import CONSULTATION_GRAPH, load_env, resolve_question, retrieve_policy_node
+from app import (
+    CONSULTATION_GRAPH,
+    apply_policy_rules_node,
+    load_env,
+    resolve_question,
+    retrieve_policy_node,
+)
 
 # 키를 읽지 않으면 LLM 경로 사례가 전부 담당 부서 이관으로 떨어져 검증이 되지 않습니다.
 load_env()
@@ -201,8 +207,7 @@ CONTINUITY_CASES = [
 ]
 
 
-# 이전 대화에 숙소 주제가 있었더라도, 현재의 해외출장 전일 이동 확인에는 여비관리기준만
-# 근거로 표시해야 합니다. 이 검증은 LLM 호출 없이 검색 노드의 반환값만 확인합니다.
+# 검색과 규칙 답변 단계를 지난 뒤에도 현재 제도와 무관한 규정 링크가 남지 않아야 합니다.
 EVIDENCE_CASES = [
     (
         "해외출장 전일 이동으로 보면 됩니다",
@@ -210,8 +215,23 @@ EVIDENCE_CASES = [
             "9월 11일부터 9월 14일까지 수도권에 체류한 뒤 9월 14일 인천공항으로 이동하는 "
             "일정을 해외출장 전일 이동으로 볼 때, 숙소지원금 운영 기준과 해외출장 비용을 어떻게 적용하나요?"
         ),
+        "trip",
         {"여비관리기준.md"},
         {"여비관리 FAQ.md", "숙소지원금 운영 기준.md", "경조금 지급기준.md"},
+    ),
+    (
+        "해외출장 종료 후 개인 휴가로 이틀 더 머물렀는데 귀국 항공권 변경 비용도 회사가 부담하나요?",
+        "해외출장 종료 후 개인 휴가로 이틀 더 머문 뒤 귀국 항공권 변경 비용의 회사 부담 여부",
+        "trip",
+        {"여비관리기준.md"},
+        {"여비관리 FAQ.md", "숙소지원금 운영 기준.md", "경조금 지급기준.md"},
+    ),
+    (
+        "조의금 신청 시 가족관계증명서를 즉시 제출하기 어려워도, 사실관계를 증명할 수 있는 다른 서류가 있으면 대체 인정될 수 있나요?",
+        "조의금 신청 시 가족관계증명서를 대체할 수 있는 증빙서류",
+        "ceremony",
+        {"경조금 지급기준.md"},
+        {"여비관리 FAQ.md", "숙소지원금 운영 기준.md", "동호회 관리 규정.md"},
     ),
 ]
 
@@ -226,10 +246,13 @@ def check_continuity(question, history, required_texts, forbidden_texts):
         assert text not in resolved, f"무관한 주제가 딸려왔습니다: {text!r} / 결과: {resolved!r}"
 
 
-def check_evidence(question, resolved, expected_files, forbidden_files):
-    """현재 질문의 제도와 무관한 규정 파일이 근거 링크로 노출되지 않는지 확인합니다."""
-    result = retrieve_policy_node({"question": question, "resolved": resolved})
-    files = {item["file"] for item in result["evidence"]}
+def check_evidence(question, resolved, intent, expected_files, forbidden_files):
+    """검색과 규칙 답변 뒤에도 무관한 규정 링크가 남지 않는지 확인합니다."""
+    state = {"question": question, "resolved": resolved}
+    retrieved = retrieve_policy_node(state)
+    rule_result = apply_policy_rules_node({**state, **retrieved, "analysis": {"intent": intent}})
+    evidence = rule_result.get("evidence", retrieved["evidence"])
+    files = {item["file"] for item in evidence}
     assert files == expected_files, f"근거 파일이 다릅니다: {sorted(files)!r}"
     assert not files & forbidden_files, f"무관한 근거 파일이 포함됐습니다: {sorted(files & forbidden_files)!r}"
 

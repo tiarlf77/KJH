@@ -324,19 +324,15 @@ def focused_evidence_files(question):
     """현재 질문의 핵심 제도에 맞는 근거 파일만 결정합니다."""
     compact_question = question.replace(" ", "")
     if "해외출장" in compact_question:
-        files = {"여비관리기준.md"}
-        has_personal_stay = any(word in question for word in ("개인휴가", "개인 휴가", "개인 일정", "연차", "휴가"))
-        has_return = any(word in question for word in ("귀국", "복귀", "입국", "항공편", "항공권"))
-        if has_personal_stay and has_return:
-            files.add("여비관리 FAQ.md")
-        return files
+        # FAQ는 상담 참고용으로만 쓰고, 화면의 근거 링크에는 기준 규정만 표시합니다.
+        return {"여비관리기준.md"}
     if any(word in question for word in ("국내출장", "국내 출장", "여비", "교통비", "숙박비", "식비", "현지교통비")):
         return {"여비관리기준.md"}
     if any(word in question for word in ("숙소", "숙소지원금", "전세", "월세", "임대차")):
         return {"숙소지원금 운영 기준.md"}
     if "동호회" in question:
         return {"동호회 관리 규정.md"}
-    if any(word in question for word in ("결혼", "회갑", "환갑", "출산", "사망", "돌아가", "별세", "승중상")):
+    if any(word in question for word in ("경조금", "조의금", "축의금", "경조사", "장례", "부고", "결혼", "회갑", "환갑", "출산", "사망", "돌아가", "별세", "승중상")):
         return {"경조금 지급기준.md"}
     return None
 
@@ -1100,7 +1096,7 @@ def apply_policy_rules_node(state: ConsultationState):
             {"file": "여비관리기준.md", "score": 1, "text": "여비관리기준"},
         ]
     else:
-        evidence = [{"file": "여비관리 FAQ.md", "score": 1, "text": "해외출장 종료 후 개인 일정 체류"}]
+        evidence = [{"file": "여비관리기준.md", "score": 1, "text": "여비관리기준"}]
     return {"answer": answer, "evidence": evidence}
 
 
