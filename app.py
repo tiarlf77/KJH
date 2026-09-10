@@ -266,7 +266,10 @@ def score_chunk(query_tokens, query_bigrams, chunk, idf, average_length):
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_CACHE_PATH = BASE_DIR / ".embedding_cache.json"
 # 조사·어미 변형은 2-gram이, 동의어·패러프레이즈는 임베딩이 잡습니다.
-VECTOR_WEIGHT = 0.5
+# 44문항 스윕에서 0.5→0.8이 hit@1 45.5→63.6%, MRR 0.639→0.744로 개선됐습니다.
+# 0.8을 넘기면 키워드가 지키던 문항("경조휴가 중 결근", "전세 계약 이사비")이 1위→9위 밖으로
+# 밀리고, 평가셋이 패러프레이즈 위주라 벡터에 유리하게 편향돼 있어 여기서 멈춥니다.
+VECTOR_WEIGHT = 0.8
 
 
 def request_embeddings(texts):
