@@ -1078,28 +1078,13 @@ def choose_after_rules(state: ConsultationState):
     return "end" if state.get("answer") else "generate"
 
 
-# 총칙성 조항은 무엇을 물을지 고르는 선택지로 쓸모가 없습니다.
-GENERAL_SECTIONS = ("목적", "적용범위", "용어의 정의", "책임과 권한", "관련문서", "기록 및 첨부", "부칙")
+def build_clarify_answer(missing, finding=""):
+    """확정된 사실을 먼저 알리고, 판정이 짚은 부족한 정보만 되묻습니다.
 
-
-def evidence_options(evidence, limit=4):
-    """검색된 청크의 계층 경로 말단을 되물을 선택지로 만듭니다."""
-    options = []
-    for item in evidence:
-        path = item.get("path") or ""
-        if any(section in path for section in GENERAL_SECTIONS):
-            continue
-        leaf = path.split(" > ")[-1].strip() if path else item.get("file", "")
-        if leaf and leaf not in options:
-            options.append(leaf)
-        if len(options) == limit:
-            break
-    return options
-
-
-def build_clarify_answer(question, evidence, missing, finding=""):
-    """확정된 사실을 먼저 알리고, 남은 정보만 선택지와 함께 되묻습니다."""
-    options = evidence_options(evidence)
+    선택지를 검색 상위 조항 제목으로 만들던 블록은 지웠습니다. 판정과 무관한 순위라
+    교통비 문의에 "5.4 출장복명"이 올라오고, FAQ 파일의 리프인 "질문"·"답변"도 섞였습니다.
+    무엇이 부족한지는 판정이 이미 missing으로 뽑아 두므로 그것만 되묻습니다.
+    """
     if finding:
         lines = [f"{finding}\n"]
     else:
@@ -1108,13 +1093,12 @@ def build_clarify_answer(question, evidence, missing, finding=""):
         lines.append("확인이 필요한 내용")
         lines.extend(f"- {item}" for item in missing[:4])
         lines.append("")
-    if options:
-        lines.append("이런 내용을 확인하실 수 있습니다")
-        lines.extend(f"- {option}" for option in options)
-        lines.append("")
+        closing = "위 내용을 알려주시면 해당 기준으로 안내해 드리겠습니다. "
+    else:
+        closing = "어떤 부분을 확인하고 싶은지 알려주시면 해당 기준으로 안내해 드리겠습니다. "
     lines.append(
-        "확인하고 싶은 항목을 말씀해 주시면 해당 기준으로 안내해 드리겠습니다. "
-        "바로 담당자 확인이 필요하시면 아래 ‘담당자에게 문의하기’ 버튼으로 문의 메일 초안을 만들 수 있습니다."
+        closing
+        + "바로 담당자 확인이 필요하시면 아래 ‘담당자에게 문의하기’ 버튼으로 문의 메일 초안을 만들 수 있습니다."
     )
     return "\n".join(lines)
 
@@ -1148,9 +1132,7 @@ def generate_answer_node(state: ConsultationState):
         judgement = state.get("analysis") or judge_groundedness(question, evidence)
         verdict = judgement["verdict"]
         if verdict == "clarify":
-            answer = build_clarify_answer(
-                question, evidence, judgement.get("missing", []), judgement.get("finding", "")
-            )
+            answer = build_clarify_answer(judgement.get("missing", []), judgement.get("finding", ""))
         elif verdict == "escalate":
             # 복리후생과 무관한 질문은 담당 부서로 넘기지 않고 상담 범위를 안내합니다.
             if judgement.get("intent") == "other":
