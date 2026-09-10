@@ -140,6 +140,33 @@ PROTECTED_CASES = [
         "25km",
         "기존 숙소지원금 수급 중",
     ),
+    # 사용자 제공 운영 예외: 혼인신고 전 결혼예정자가 주소만 전입했더라도 실제 동거하지
+    # 않으면 단신 근무자 지위를 상실한 것으로 보지 않는다. 주소 등록을 동거로 추정하거나
+    # 자격 상실 전제의 통보·윤리위반 경고를 붙이지 않는지도 함께 확인한다.
+    (
+        "혼인신고는 안 했고, 아직 동거는 안 해요.",
+        ("실제 동거", "함께 거주", "함께 살"),
+        ("지원 대상이 아닙니다", "지원 불가", "윤리위반", "전입신고 사실을 14일 이내"),
+        [
+            {
+                "role": "user",
+                "content": "숙소지원금을 받고 있는데 결혼예정자가 현재 제가 사는 원룸으로 전입신고를 했어요. 숙소지원금에서 제외되나요?",
+            },
+            {"role": "assistant", "content": "혼인신고 여부와 실제 동거 여부를 알려주세요."},
+        ],
+    ),
+    # 실제 동거를 시작했다면 단신 근무자 지위 상실 가능성과 14일 이내 통보를 안내한다.
+    (
+        "숙소지원금을 받고 있는데 혼인신고 전 결혼예정자와 실제 동거를 시작했어요.",
+        "14일 이내",
+        "자동 제외하지 않음",
+    ),
+    # 주소 전입만 말하고 동거 여부를 밝히지 않았다면 지원 불가로 단정하지 않고 확인한다.
+    (
+        "숙소지원금을 받고 있는데 결혼예정자가 제 원룸으로 전입신고했어요. 제외되나요?",
+        ("실제 동거", "함께 거주", "함께 살"),
+        ("지원 대상이 아닙니다", "지원 불가", "윤리위반"),
+    ),
     # 경조금 지급기준 5.2: 앞선 환갑 대화가 남아 있어도 새 부모상 문의는 사망 기준으로 답한다.
     # 삭제한 build_hoegap_answer가 "부모님"이라는 낱말만 보고 이전 회갑 주제를 이어받아,
     # 100만원 대상자에게 환갑 20만원 안내를 반환하며 그래프를 끝내던 사례다.
@@ -296,7 +323,9 @@ def check_case(question, required_text, forbidden_text, history=()):
         options = required_text if isinstance(required_text, tuple) else (required_text,)
         assert any(option in answer for option in options), f"필수 문자열이 없습니다: {options!r}"
     if forbidden_text:
-        assert forbidden_text not in answer, f"금지 문자열이 포함됐습니다: {forbidden_text!r}"
+        forbidden_items = forbidden_text if isinstance(forbidden_text, (tuple, list)) else (forbidden_text,)
+        for item in forbidden_items:
+            assert item not in answer, f"금지 문자열이 포함됐습니다: {item!r}"
 
 
 def run_cases(group, cases, checker=check_case):
