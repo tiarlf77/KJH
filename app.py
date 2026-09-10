@@ -906,6 +906,13 @@ GROUNDEDNESS_INSTRUCTIONS = (
     "clarify일 때 missing에는 질문에 아직 없는 정보만 넣는다. 질문이 이미 밝힌 사실은 "
     "다시 묻지 않는다. 예를 들어 질문에 '개인 사정으로'라고 적혀 있으면 "
     "업무상인지 개인 사정인지는 묻지 않는다. 되물을 것이 남지 않으면 clarify가 아니다.\n"
+    "missing에는 사용자가 스스로 답할 수 있는 사실만 넣는다. 날짜·금액·관계·실제 일정처럼 "
+    "사용자가 아는 것이다. '회사가 인정하는지', '승인이 나는지', '규정상 가능한지'처럼 "
+    "담당 부서의 판단이 필요한 항목은 missing이 아니다. 그것은 사용자가 물은 질문 자체이므로 "
+    "되물으면 대화가 제자리를 돈다. 그런 항목만 남는다면 clarify가 아니라 escalate다.\n"
+    "이전 대화가 함께 주어지면 그 안에서 이미 되물은 항목과 사용자가 답한 사실을 확인한다. "
+    "표현을 바꿔서 다시 묻지 않는다. 같은 것을 두 번 물어야 할 상황이면 이미 답을 받은 것이므로 "
+    "clarify가 아니라 answerable 또는 escalate로 판정한다.\n"
     "- escalate: 근거가 질문의 주제를 다루지 않는다. 어휘가 겹쳐도 다른 항목을 다루면 escalate다.\n"
     "예를 들어 근거가 '주차비는 기타 경비로 지급'인데 질문이 '주차 위반 과태료'라면, "
     "주차라는 단어가 겹쳐도 과태료를 다루지 않으므로 escalate다.\n"
@@ -929,7 +936,7 @@ GROUNDEDNESS_INSTRUCTIONS = (
 )
 
 
-def judge_groundedness(question, evidence):
+def judge_groundedness(question, evidence, history=None):
     """검색 근거만으로 답할 수 있는지 LLM에 판정을 맡깁니다."""
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
     if not api_key or not evidence:
@@ -938,12 +945,20 @@ def judge_groundedness(question, evidence):
         f"[근거 {index}] {item['file']} ({item.get('path', '')})\n{item['text'][:1200]}"
         for index, item in enumerate(evidence, 1)
     )
+    # 이전 대화를 함께 넘깁니다. 판정이 자기가 무엇을 되물었는지 모르면 표현만 바꿔 같은 것을
+    # 다시 묻고, 사용자가 답해도 대화가 끝나지 않습니다.
+    prior = "\n".join(
+        f"{'사용자' if item.get('role') == 'user' else '상담'}: {item.get('content', '')[:600]}"
+        for item in (history or [])[-4:]
+        if item.get("role") in ("user", "assistant") and item.get("content")
+    )
+    prior_text = f"이전 대화:\n{prior}\n\n" if prior else ""
     payload = {
         "model": MODEL,
         "reasoning": {"effort": "none"},
         # 신청기한처럼 경과일로 갈리는 판정에는 기준일이 있어야 합니다.
         "instructions": f"{GROUNDEDNESS_INSTRUCTIONS}\n오늘 기준일은 {date.today().isoformat()}이다.",
-        "input": [{"role": "user", "content": f"질문: {question}\n\n검색된 규정 근거:\n{evidence_text}"}],
+        "input": [{"role": "user", "content": f"{prior_text}질문: {question}\n\n검색된 규정 근거:\n{evidence_text}"}],
     }
     request = Request(
         "https://api.openai.com/v1/responses",
@@ -1070,7 +1085,7 @@ def retrieve_policy_node(state: ConsultationState):
 def analyze_question_node(state: ConsultationState):
     """검색 근거로 답할 수 있는지와 함께 제도 영역·대상 관계를 한 번에 뽑습니다."""
     question = state.get("resolved") or state["question"]
-    return {"analysis": judge_groundedness(question, state.get("evidence", []))}
+    return {"analysis": judge_groundedness(question, state.get("evidence", []), state.get("history", []))}
 
 
 def rule_applies(analysis, *domains):
@@ -1169,7 +1184,7 @@ def generate_answer_node(state: ConsultationState):
     if not evidence:
         answer = build_unknown_policy_answer(question)
     else:
-        judgement = state.get("analysis") or judge_groundedness(question, evidence)
+        judgement = state.get("analysis") or judge_groundedness(question, evidence, history)
         verdict = judgement["verdict"]
         if verdict == "clarify":
             answer = build_clarify_answer(judgement.get("missing", []), judgement.get("finding", ""))
