@@ -359,26 +359,46 @@ REFERENCE_CHUNK_LIMIT = 2
 REFERENCE_TOTAL_LIMIT = 4
 
 
-# 상담 참고용 문서입니다. 답변 근거로는 쓰되 화면의 "확인한 규정"에는 올리지 않습니다.
-# FAQ는 기준 규정이 아니라 해설이라, 링크로 제시하면 사용자가 근거 조항으로 오인합니다.
-REFERENCE_ONLY_FILES = {"여비관리 FAQ.md"}
+# 사규 원본이 아닌 보조 문서입니다. 감추지 않고 구분해서 보여줍니다.
+# 사내 추가 기준은 규정집에 없는 사내 운영 기준을, 여비관리 FAQ는 규정집이 다루지 않는
+# 상황의 해설을 담습니다. 실제로 승중상 인정 조건과 백숙부모상 경조휴가는 사내 추가 기준
+# 에만 있고, 개인 사유 귀국 연기는 FAQ에만 있습니다. 사규를 먼저 보여주는 식으로 순서를
+# 정하면 정작 판단의 근거인 이 문서들이 가려집니다. 어느 문서에서 왔는지는 점수가 정하고,
+# 화면에는 사규인지 보조인지만 표시합니다.
+SUPPLEMENT_FILES = {"사내 추가 기준.md", "여비관리 FAQ.md"}
+
+
+def evidence_tier(file_name):
+    """근거 문서의 성격. 화면에서 사규와 보조 기준을 구분해 표시하는 데 씁니다."""
+    return "supplement" if file_name in SUPPLEMENT_FILES else "regulation"
 
 
 def display_evidence(evidence):
-    """화면에 표시할 근거만 고릅니다. 답변 생성에 넘기는 근거는 좁히지 않습니다.
+    """화면에 표시할 근거만 고르고 문서 성격을 붙입니다. 생성에 넘기는 근거는 좁히지 않습니다.
 
     낱말로 검색 자체를 좁히던 focused_evidence_files는 전 지표를 깎아 지웠습니다(44문항
     MRR 0.760 -> 0.685). 좁혀야 할 곳은 검색이 아니라 표시입니다. 판정과 생성은 여러 규정을
-    함께 보아야 하고, 사용자에게 보이는 근거 링크만 질문이 실제로 걸린 규정 하나로 줄이면
-    둘 다 얻습니다. 파일 선택은 낱말이 아니라 점수로 합니다.
+    함께 보아야 하고, 사용자에게 보이는 링크만 줄이면 둘 다 얻습니다.
+
+    사규와 보조에서 각각 최고 점수 파일을 하나씩 고릅니다. 둘 중 하나만 보이면 답변의
+    근거가 반쪽만 드러납니다. 예를 들어 "해외출장 전일 이동"은 FAQ가 1위지만 여비관리기준도
+    함께 쓰이고, "승중상"은 사내 추가 기준이 1위지만 지급액은 경조금 지급기준에 있습니다.
+    파일 선택은 낱말이 아니라 점수로 하므로 '숙소' 같은 낱말 때문에 엉뚱한 규정에 갇히지
+    않습니다.
     """
-    ranked = [item for item in evidence if not item.get("referenced")]
-    # 참고 문서만 남는 질문이라면 숨기지 않습니다. 숨기면 근거 없는 답변으로 보입니다.
-    pool = [item for item in ranked if item["file"] not in REFERENCE_ONLY_FILES] or ranked
-    if not pool:
+    ranked = [item for item in evidence if not item.get("referenced")] or evidence
+    if not ranked:
         return evidence
-    top_file = max(pool, key=lambda item: item["score"])["file"]
-    return [item for item in evidence if item["file"] == top_file]
+    keep = set()
+    for tier in ("regulation", "supplement"):
+        tier_items = [item for item in ranked if evidence_tier(item["file"]) == tier]
+        if tier_items:
+            keep.add(max(tier_items, key=lambda item: item["score"])["file"])
+    return [
+        {**item, "tier": evidence_tier(item["file"])}
+        for item in evidence
+        if item["file"] in keep
+    ]
 
 
 def attach_referenced_chunks(selected, chunks):
