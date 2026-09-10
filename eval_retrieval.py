@@ -7,8 +7,16 @@ BIGRAM_WEIGHT·VECTOR_WEIGHT·경로 임베딩 같은 노브를 의견이 아니
 실행: SSL_CERT_FILE=$(python3 -m certifi) python3 eval_retrieval.py
       뒤에 -v를 붙이면 전 문항의 순위를 봅니다.
 
-기준선 (2026-09-10, 44문항 / 경로+본문 임베딩 / BIGRAM_WEIGHT 1.0 / VECTOR_WEIGHT 0.8):
-    hit@1 63.6%  hit@3 81.8%  hit@5 90.9%  hit@10 93.2%  hit@20 100%  MRR 0.744
+세트가 둘이다. 목적이 다르니 섞어 보지 말 것.
+- 회귀 44문항: 손으로 만든 문항. 고친 것이 다시 깨지는지 본다. 라벨은 계층 경로.
+  코퍼스를 보면서 만들었으므로 커버리지 지표로는 신뢰할 수 없다. 더 늘리지 말 것.
+- 실사용 18문항: 실제 상담 로그(`규정/숙소지원금 이슈 샘플.txt`)에서 옮긴 문항. 라벨은 본문
+  문자열이라 청킹을 바꿔도 유효하다. 다만 로그가 숙소지원금 영역에만 있어 여비·경조금·동호회
+  커버리지는 여전히 없다.
+
+기준선 (2026-09-10, 경로+본문 임베딩 / BIGRAM_WEIGHT 1.0 / VECTOR_WEIGHT 0.8):
+    회귀   hit@1 63.6%  hit@3 81.8%  hit@5 90.9%  hit@10 93.2%  hit@20 100%  MRR 0.744
+    실사용 hit@1 50.0%  hit@3 88.9%  hit@5 94.4%  hit@10  100%  hit@20 100%  MRR 0.681
 직전 기준선(VECTOR_WEIGHT 0.5)은 hit@1 45.5% / MRR 0.639였습니다. 두 상수는 이 44문항으로
 격자 스윕해 정했고, BIGRAM_WEIGHT는 0.5·1.5·2.0 모두 1.0보다 나빴습니다.
 노브를 바꾼 뒤 이 숫자와 비교하세요. 질문 임베딩도 파일 캐시를 타므로 재실행은 무료입니다.
@@ -81,38 +89,86 @@ CASES = [
     ("향우회도 동호회로 등록해서 지원받을 수 있나요?", ["5.3 동호인 등록 제한"]),
 ]
 
+# --- 실사용 세트 ---
+# 위 CASES는 코퍼스를 보면서 만든 문항이라 커버리지 지표로는 신뢰할 수 없습니다. hit@20이 100%로
+# 나오지만 "국내출장 숙박비 한도" 같은 평범한 질문 하나가 미검색으로 떨어집니다.
+# 아래는 `규정/숙소지원금 이슈 샘플.txt`의 실제 상담 30여 건 중 규정으로 판정 가능한 것을
+# 직원 말투로 옮긴 것입니다. 상황을 제가 고르지 않았다는 점이 이 세트의 값어치입니다.
+#
+# 라벨이 경로가 아니라 **본문 문자열**입니다. 경로 라벨은 청킹을 바꾸면 통째로 흔들려서
+# 청킹 실험을 아예 못 잽니다. 본문 문자열은 조항이 어느 청크에 들어가든 따라갑니다.
+REAL_CASES = [
+    ("파견이 잦아 숙소 계약을 연장하지 못했는데, 나중에 다시 계약하면 재신청할 수 있나요? 못 받은 기간도 지원기간에 들어가나요?",
+     ["전체 지원기간에 포함한다"]),
+    ("4월 3일에 숙소 계약을 했는데 발령은 4월 20일입니다. 4월 월세도 지원되나요?",
+     ["매월 15일을 기준으로", "완료된 달로부터 기산"]),
+    ("예전에 근무했던 지역으로 다시 발령났습니다. 숙소지원금을 얼마나 더 받을 수 있나요?",
+     ["재부임할 경우 발령일로부터 1년간"]),
+    ("포항에서 2개월, 구미에서 3년 조금 넘게 받았고 이번에 포항으로 재부임합니다. 3년까지 받을 수 있나요?",
+     ["합이 3년 이하일 경우에는 3년까지"]),
+    ("숙소지원금을 받다가 베트남 주재원으로 나가게 됐습니다. 언제까지 지급되나요?",
+     ["해외주재원 부임 대상자는 부임일이 속한 월의 다음 달부터"]),
+    ("자기개발 휴직을 반년 넘게 쓸 예정인데 숙소지원금은 언제부터 끊기나요?",
+     ["휴직 기간이 연속해서 6개월을 초과"]),
+    ("육아휴직 6개월 쓰고 복직했다가 다시 6개월 휴직하려는데 계속 지원받을 수 있나요?",
+     ["휴직 기간이 연속해서 6개월을 초과"]),
+    ("작년에 연장 신청을 못 해서 올해 미지급 중입니다. 다시 신청하려면 어떤 서류가 필요한가요?",
+     ["월세 이체내역"]),
+    ("결혼했고 배우자가 인천에 살고 있습니다. 저는 세종에서 근무하는데 지원 대상인가요?",
+     ["기혼자는 배우자 주소지", "반경 25km를 초과하는 지역에 거주"]),
+    ("6월 15일에 발령이 나는데 부임비는 6월에 적용되나요, 7월인가요?",
+     ["매월 15일을 기준으로"]),
+    ("세금 문제로 가족을 두 달만 숙소 주소지로 전입시키려 합니다. 지원에 문제가 되나요?",
+     ["무주택 단신부임", "실제 거주 여부 확인"]),
+    ("본가가 경주 안강이고 근무지는 포항입니다. 직선거리로 22km인데 숙소지원금 받을 수 있나요?",
+     ["반경 25km를 초과하는 지역에 거주"]),
+    ("이번에 경력으로 입사했고 주재지는 세종, 본가는 경남입니다. 신규 입사자도 대상인가요?",
+     ["신규 채용자(신입, 경력, 계약직, 임시직 포함)"]),
+    ("그룹사에서 인력교류로 넘어와 파견비를 2년 받았습니다. 파견비가 끝나면 숙소지원금을 받을 수 있나요?",
+     ["그룹사 인력교류자", "파견비 지급 대상자"]),
+    ("광양으로 발령났는데 포항 숙소를 아직 정리하지 못했습니다. 그동안 월세는 어떻게 되나요?",
+     ["전(前) 근무지 숙소를 정리하는 기간"]),
+    ("구미 숙소가 경매로 넘어가서 3개월 안에 정리를 못 했습니다. 연장이 되나요?",
+     ["처분 노력을 입증할 자료"]),
+    ("작년 7월에 서울사무소로 발령났는데 이제야 신청하려 합니다. 지원 대상이 되나요?",
+     ["6개월 이내에 신청하지 않으면 지원자격을 상실"]),
+    ("해외파견으로 2년간 지원을 못 받았습니다. 복귀하면 그 2년만큼 뒤로 밀리나요?",
+     ["전체 지원기간에 포함한다"]),
+]
+
 CUTOFFS = (1, 3, 5, 10, 20)
 
 
-def validate_labels():
-    """라벨이 실제 청크 경로와 맞는지 확인해 오타로 인한 가짜 실패를 막습니다."""
-    paths = [chunk["path"] for chunk in load_policy_index()[0]]
+def validate_labels(cases, field):
+    """라벨이 실제 청크와 맞는지 확인해 오타로 인한 가짜 실패를 막습니다."""
+    haystack = [chunk[field] for chunk in load_policy_index()[0]]
     unknown = []
-    for question, golds in CASES:
+    for question, golds in cases:
         for gold in golds:
-            if not any(gold in path for path in paths):
+            if not any(gold in item for item in haystack):
                 unknown.append((question, gold))
     if unknown:
-        print("경로와 맞지 않는 라벨이 있습니다. 규정이 바뀌었는지 확인하세요.")
+        print(f"청크 {field}와 맞지 않는 라벨이 있습니다. 규정이 바뀌었는지 확인하세요.")
         for question, gold in unknown:
             print(f"  - {gold!r} ← {question}")
         raise SystemExit(2)
 
 
-def first_gold_rank(question, golds):
+def first_gold_rank(question, golds, field):
     """정답 조항이 검색 결과 몇 번째에 나오는지 반환합니다. 없으면 None."""
     for rank, item in enumerate(retrieve(question), 1):
-        if any(gold in item.get("path", "") for gold in golds):
+        if any(gold in item.get(field, "") for gold in golds):
             return rank
     return None
 
 
-def main():
-    verbose = "-v" in sys.argv
-    validate_labels()
+def run_set(label, cases, field, verbose):
+    """한 세트를 측정해 hit@k와 MRR을 출력합니다."""
+    validate_labels(cases, field)
+    print(f"[{label}] {len(cases)}문항 · 라벨 기준 {field}")
     ranks = []
-    for question, golds in CASES:
-        rank = first_gold_rank(question, golds)
+    for question, golds in cases:
+        rank = first_gold_rank(question, golds, field)
         ranks.append(rank)
         if verbose or rank is None or rank > 5:
             position = f"{rank}위" if rank else "미검색"
@@ -126,9 +182,16 @@ def main():
     for cutoff in CUTOFFS:
         hits = sum(1 for rank in found if rank <= cutoff)
         print(f"hit@{cutoff:<2} {hits / total:6.1%}  ({hits}/{total})")
-    mrr = sum(1 / rank for rank in found) / total
-    print(f"MRR    {mrr:6.3f}")
+    print(f"MRR    {sum(1 / rank for rank in found) / total:6.3f}")
     print(f"미검색 {total - len(found)}건")
+    print()
+
+
+def main():
+    verbose = "-v" in sys.argv
+    # 회귀 세트는 경로 라벨, 실사용 세트는 본문 라벨을 쓴다. 뒤쪽은 청킹을 바꿔도 유효하다.
+    run_set("회귀", CASES, "path", verbose)
+    run_set("실사용", REAL_CASES, "text", verbose)
 
 
 if __name__ == "__main__":
