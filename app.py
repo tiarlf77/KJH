@@ -129,12 +129,15 @@ def split_policy_chunks(path) -> list[dict]:
         if heading:
             level = len(heading.group(1))
             title = heading.group(2)
-            # 더 깊은 제목이면 부모 서두를 유지하고, 리프가 끝날 때만 청크를 확정합니다.
-            if headings and level <= headings[-1][0]:
-                body = "\n".join(current_lines).strip()
-                if body:
-                    chunks.append({"path": " > ".join(title for _, title in headings), "text": body})
-                current_lines = []
+            # 제목을 만나면 지금까지 모은 본문을 지금 경로로 확정합니다. 더 깊은 제목이
+            # 올 때 부모 서두를 들고 내려가면 그 본문이 맨 아래 리프의 것이 됩니다.
+            # 별첨 1의 국내여비기준표가 실제로 '별첨 1 > 주석 > 유류비 산식' 청크에
+            # 흡수돼 있었고, 경로를 본문과 함께 임베딩하므로 벡터까지 유류비 쪽으로
+            # 끌려가 숙박비 질문에서 20위 밖으로 밀렸습니다.
+            body = "\n".join(current_lines).strip()
+            if body and headings:
+                chunks.append({"path": " > ".join(name for _, name in headings), "text": body})
+            current_lines = []
             # 제목 단계가 건너뛰어져도 실제 상위 제목만 경로에 남깁니다.
             while headings and headings[-1][0] >= level:
                 headings.pop()
