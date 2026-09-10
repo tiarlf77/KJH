@@ -1,6 +1,6 @@
 """복리후생 상담 규칙의 사용자 관점 동작을 고정하는 회귀 테스트입니다."""
 
-from app import CONSULTATION_GRAPH, load_env, resolve_question
+from app import CONSULTATION_GRAPH, attach_referenced_chunks, load_env, resolve_question
 
 # 키를 읽지 않으면 LLM 경로 사례가 전부 담당 부서 이관으로 떨어져 검증이 되지 않습니다.
 load_env()
@@ -264,8 +264,32 @@ def run_cases(group, cases, checker=check_case):
     return passed, failed, skipped
 
 
+def check_reference_expansion():
+    """참조 확장은 순수 함수라 API 없이 확인합니다. LLM 회차 흔들림과 무관하게 깨집니다."""
+    chunks = [
+        {"file": "여비관리기준.md", "path": "여비관리기준 > 7. 관련문서 > 별첨 1. 국내여비기준표", "text": "숙박비 100,000원"},
+        {"file": "여비관리기준.md", "path": "여비관리기준 > 7. 관련문서 > 별첨 2. 국내이전료 정액표", "text": "이전료"},
+        {"file": "경조금 지급기준.md", "path": "경조금 지급기준 > 별첨 1. 다른 문서의 같은 번호", "text": "끌려오면 안 됨"},
+    ]
+    pointing = [{"file": "여비관리기준.md", "path": "… > 5.10.2 소액경비 및 숙박비",
+                 "text": "소액경비 및 숙박료 지급기준은 별첨 1에 의한다.", "score": 0.9}]
+    added = attach_referenced_chunks(list(pointing), chunks)[1:]
+    assert [item["path"] for item in added] == [chunks[0]["path"]], f"별첨 1만 붙어야 합니다: {added}"
+
+    # 별첨 목록표처럼 번호를 늘어놓기만 하는 청크는 따라가지 않습니다.
+    listing = [{"file": "여비관리기준.md", "path": "… > 6. 기록 및 첨부",
+                "text": "별첨 1, 별첨 2, 별첨 3 보존연한", "score": 0.9}]
+    assert attach_referenced_chunks(list(listing), chunks) == listing, "나열 청크는 따라가면 안 됩니다."
+
+    # 이미 근거에 있는 청크는 중복해서 붙이지 않습니다.
+    already = list(pointing) + [dict(chunks[0], score=0.5)]
+    assert attach_referenced_chunks(already, chunks) == already, "중복 첨부가 발생했습니다."
+    print("통과 [D-01] 참조 확장(별첨 지목·나열 제외·중복 방지)")
+
+
 def main():
     """보호 동작과 알려진 오답을 실행하고 전체 결과를 요약합니다."""
+    check_reference_expansion()
     protected = run_cases("A", PROTECTED_CASES)
     unresolved = run_cases("B", KNOWN_FAILURE_CASES)
     continuity = run_cases("C", CONTINUITY_CASES, check_continuity)

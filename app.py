@@ -332,7 +332,66 @@ def retrieve(question, limit=20):
             selected.append(item)
             taken.add((item["file"], item["path"]))
     selected.sort(key=lambda item: item["score"], reverse=True)
-    return selected[:limit]
+    return attach_referenced_chunks(selected[:limit], chunks)
+
+
+# "별첨 1에 의한다", "제5.11에서 규정한" 처럼 규정이 스스로 가리키는 참조 표현입니다.
+REFERENCE_PATTERN = re.compile(r"별첨\s*(\d+)|제\s*(\d+\.\d+)")
+# 참조를 따라갈 상위 근거 수. 아래쪽 근거까지 따라가면 질문과 먼 별첨이 붙습니다.
+REFERENCE_SOURCE_LIMIT = 5
+# 한 청크가 이보다 많은 번호를 담고 있으면 가리키는 것이 아니라 나열하는 것으로 봅니다.
+REFERENCE_MARKER_LIMIT = 2
+# 참조 하나당, 그리고 한 질문당 붙일 수 있는 근거 수.
+REFERENCE_CHUNK_LIMIT = 2
+REFERENCE_TOTAL_LIMIT = 4
+
+
+def attach_referenced_chunks(selected, chunks):
+    """근거가 가리키는 별첨·조항을 함께 붙입니다.
+
+    5.10.2는 본문이 "소액경비 및 숙박료 지급기준은 별첨 1에 의한다"뿐이라 금액이 없습니다.
+    검색이 이 조항을 1위로 올려도 판정은 근거에 답이 없다고 보고 이관으로 떨어뜨립니다.
+    규정이 명시한 링크만 따라가므로 순위 계산에는 손대지 않고 근거에만 더합니다.
+    참조가 다시 참조를 물고 오지 않도록 1홉만 따라갑니다.
+    """
+    if not selected:
+        return selected
+    taken = {(item["file"], item["path"]) for item in selected}
+    targets = []
+    for item in selected[:REFERENCE_SOURCE_LIMIT]:
+        markers = {
+            f"별첨 {attachment}." if attachment else f"{clause} "
+            for attachment, clause in REFERENCE_PATTERN.findall(item["text"])
+        }
+        # 별첨 목록표('6. 기록 및 첨부')처럼 번호를 죽 늘어놓기만 하는 청크는 가리키는
+        # 것이 아니라 나열하는 것입니다. 따라가면 별첨 전체가 근거로 딸려옵니다.
+        if len(markers) > REFERENCE_MARKER_LIMIT:
+            continue
+        # 같은 규정 안의 참조만 따라갑니다. 파일이 다르면 번호가 겹쳐도 다른 문서입니다.
+        targets.extend((item["file"], marker) for marker in markers)
+    added = []
+    for file_name, marker in targets:
+        hits = [
+            chunk for chunk in chunks
+            if chunk["file"] == file_name
+            and marker in chunk["path"]
+            and (chunk["file"], chunk["path"]) not in taken
+        ]
+        # 별첨 아래 하위 절이 많으면 표가 있는 상위부터 가져옵니다.
+        hits.sort(key=lambda chunk: len(chunk["path"]))
+        for chunk in hits[:REFERENCE_CHUNK_LIMIT]:
+            taken.add((chunk["file"], chunk["path"]))
+            # 참조로 딸려온 근거는 검색 점수가 아니라 출처가 근거이므로 0점으로 둡니다.
+            added.append({
+                "file": chunk["file"],
+                "score": 0.0,
+                "keyword_score": 0.0,
+                "vector_score": 0.0,
+                "path": chunk["path"],
+                "text": chunk["text"][:3000],
+                "referenced": True,
+            })
+    return selected + added[:REFERENCE_TOTAL_LIMIT]
 
 
 def add_months(value, months):
