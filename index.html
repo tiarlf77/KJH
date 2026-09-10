@@ -5,29 +5,86 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>사내 복리후생 통합 상담</title>
   <style>
-    :root{--bg:#f9f9f9;--ink:#1a1c1c;--muted:#424656;--line:#c3c6d8;--accent:#0f62fe;--card:#fff;--warn:#fff7ed}
-    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:Arial,"Noto Sans KR",sans-serif}
-    .app{min-height:100vh;display:flex;flex-direction:column}.top{height:62px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 24px;gap:12px}
-    .mark{width:30px;height:30px;border-radius:8px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700}.brand{font-weight:700}.status{margin-left:auto;color:var(--muted);font-size:13px}
-    main{width:min(920px,calc(100% - 32px));margin:0 auto;padding:44px 0 150px;flex:1}.hero{text-align:center;margin:20px 0 36px}.hero h1{font-size:30px;margin:0 0 12px}.hero p{color:var(--muted);margin:0}
-    .chat{display:flex;flex-direction:column;gap:24px}.message{display:flex;gap:12px;line-height:1.7}.avatar{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;flex:0 0 32px;font-size:13px;font-weight:700}.user .avatar{background:#dbe1ff;color:#003da9}.assistant .avatar{background:var(--accent);color:#fff}.bubble{max-width:calc(100% - 44px);white-space:pre-wrap}.user .bubble{background:#eeeeee;border:0;border-radius:8px;padding:12px 16px}.assistant .bubble{background:#fff;border:1px solid var(--accent);border-radius:8px;padding:16px;flex:1}
-    .evidence{display:grid;gap:10px;margin-top:18px}.evidence-card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:14px 16px}.evidence-title{font-weight:700;margin-bottom:6px;color:#1a3ca8}.meta{font-size:12px;color:var(--muted)}.tag{display:inline-block;background:#dbe1ff;color:#003da9;border-radius:4px;padding:3px 8px;font-size:12px;margin:8px 6px 0 0}.notice{background:var(--warn);border:1px solid #fed7aa;border-radius:6px;padding:12px 14px;margin-top:12px;color:#9a3412}.inquiry-button{margin-top:14px;border:1px solid var(--accent);background:#fff;color:var(--accent);border-radius:6px;padding:8px 12px;cursor:pointer;font-weight:700}.quick-links{margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}.quick-links-title{font-size:12px;color:var(--muted);margin-bottom:8px}.quick-links-list{display:flex;flex-wrap:wrap;gap:8px}.quick-link{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;color:#424656;border-radius:6px;padding:6px 10px;font-size:12px;text-decoration:none}.quick-link:hover{border-color:var(--accent);color:var(--accent)}.inquiry-panel{position:fixed;inset:0;background:#0006;display:grid;place-items:center;padding:20px;z-index:2}.inquiry-card{width:min(680px,100%);max-height:90vh;overflow:auto;background:#fff;border-radius:10px;padding:24px;box-shadow:0 12px 40px #0003}.inquiry-card h2{margin:0 0 18px}.inquiry-card label{display:block;font-weight:700;font-size:13px;margin:12px 0 6px}.inquiry-card input,.inquiry-card textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:10px;font:inherit}.inquiry-card textarea{min-height:260px;resize:vertical}.inquiry-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}.secondary{border:1px solid var(--line);background:#fff;border-radius:6px;padding:9px 14px;cursor:pointer}.inquiry-history{margin-top:20px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:16px}.inquiry-history h3{margin:0 0 10px}.history-row{border-top:1px solid var(--line);padding:10px 0;font-size:13px}.history-status{color:#166534;font-weight:700}
-    .sources{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:18px;padding-top:12px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}.sources a{color:#003da9;text-decoration:none;border-bottom:1px solid #9aa9df}.sources a:hover{color:var(--accent)}
-    .empty{text-align:center;color:var(--muted);padding:50px 0}.composer-wrap{position:fixed;bottom:0;left:0;right:0;background:linear-gradient(transparent,var(--bg) 24%);padding:32px 16px 22px}.composer{width:min(920px,100%);margin:auto;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 3px 15px #00000012;display:flex;align-items:flex-end;padding:10px 12px 10px 16px}.composer textarea{border:0;outline:0;resize:none;flex:1;min-height:26px;max-height:130px;font:inherit;line-height:1.5;padding:5px 0}.send{border:0;background:var(--accent);color:#fff;border-radius:6px;padding:9px 14px;cursor:pointer;font-weight:700}.send:disabled{background:#c3c6d8;cursor:not-allowed}.hint{width:min(920px,100%);margin:8px auto 0;text-align:center;color:var(--muted);font-size:12px}
-    @media(max-width:600px){main{padding-top:28px}.hero h1{font-size:24px}.status{display:none}.top{padding:0 16px}}
+    :root{--bg:#fcfcfa;--ink:#232522;--muted:#72766f;--soft:#f5f6f3;--sidebar:#eef6ea;--line:#e1e4de;--accent:#486a4a;--accent-dark:#2f5534;--accent-soft:#e5f0e3;--card:#fff;--warn:#fff8eb}
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{margin:0;background:var(--bg);color:var(--ink);font-family:Pretendard,"Noto Sans KR","Apple SD Gothic Neo",Arial,sans-serif}
+    button,textarea,input{font:inherit}
+    button{color:inherit}
+    .app{min-height:100vh;display:flex}
+    .sidebar{position:fixed;inset:0 auto 0 0;width:264px;background:linear-gradient(145deg,#edf6e9 0%,#f5f9f2 68%,#eef6ea 100%);border-right:1px solid #dce7d8;display:flex;flex-direction:column;padding:18px 14px 14px;z-index:5}
+    .brand-row{display:flex;align-items:center;gap:11px;padding:0 8px 18px}.mark{width:38px;height:38px;border-radius:11px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:800;font-size:18px;box-shadow:0 5px 14px #36573a24}.brand{font-weight:760;font-size:17px}.collapse{margin-left:auto;border:0;background:transparent;color:var(--muted);font-size:21px;cursor:pointer}
+    .new-chat{border:0;background:var(--accent);color:#fff;border-radius:11px;padding:13px 15px;display:flex;align-items:center;gap:11px;font-weight:700;cursor:pointer;box-shadow:0 5px 14px #36573a1f}.new-chat span{font-size:22px;font-weight:400;line-height:1}
+    .nav-section{margin-top:25px}.nav-title{padding:0 10px 8px;color:#777f75;font-size:12px;font-weight:700}.nav-item{width:100%;border:0;background:transparent;border-radius:10px;padding:10px 11px;display:flex;align-items:center;gap:11px;text-align:left;cursor:pointer;font-size:14px}.nav-item:hover,.nav-item.active{background:#e1ecdd}.nav-icon{width:20px;text-align:center;color:#435244}.badge{margin-left:auto;padding:2px 7px;border-radius:20px;background:#e7e9e4;color:#747872;font-size:10px}.sidebar-rule{border:0;border-top:1px solid #dbe6d7;margin:18px 8px 0}
+    .recent-list{display:grid;gap:3px}.recent-item{padding:9px 11px;border-radius:9px;font-size:13px;color:#414640;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.recent-item small{display:block;color:#8a8f88;margin-top:3px}.profile{margin-top:auto;border-top:1px solid #dbe6d7;padding:13px 8px 0;display:flex;align-items:center;gap:10px}.profile-avatar{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:#aebaae;color:#fff;font-weight:700}.profile-copy strong{display:block;font-size:13px}.profile-copy small{color:#7d827c;font-size:11px}.profile-arrow{margin-left:auto;color:#687067}
+    .workspace{min-width:0;flex:1;margin-left:264px}.mobile-top{display:none}.content-grid{min-height:100vh;display:grid;grid-template-columns:minmax(0,1fr) 316px}.main-content{width:min(850px,calc(100% - 48px));margin:0 auto;padding:70px 0 190px}.hero{text-align:center;min-height:525px;display:flex;flex-direction:column;justify-content:center;align-items:center}.assistant-mark{width:56px;height:48px;margin-bottom:24px;position:relative;border:4px solid #5f8662;border-radius:22px;display:flex;align-items:center;justify-content:center;gap:7px}.assistant-mark:after{content:"";position:absolute;bottom:-8px;left:10px;width:14px;height:14px;border-left:4px solid #5f8662;transform:skew(-30deg) rotate(-18deg);background:var(--bg)}.assistant-mark i{width:6px;height:6px;border-radius:50%;background:#5f8662}.hero h1{font-size:34px;letter-spacing:-1.2px;margin:0 0 12px}.hero>p{color:var(--muted);font-size:16px;margin:0 0 34px}.suggestions{width:min(720px,100%);display:grid;grid-template-columns:1fr 1fr;gap:14px}.suggestion{border:1px solid var(--line);background:#fff;border-radius:14px;padding:18px;display:grid;grid-template-columns:42px 1fr 18px;align-items:center;gap:13px;text-align:left;cursor:pointer;transition:.18s ease}.suggestion:hover{border-color:#b8cab5;transform:translateY(-1px);box-shadow:0 8px 22px #354d3710}.suggestion-icon{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);font-size:20px}.suggestion:nth-child(2) .suggestion-icon{background:#fff1d9;color:#9b6312}.suggestion strong{display:block;font-size:15px;margin-bottom:5px}.suggestion small{display:block;color:var(--muted);line-height:1.45}.suggestion-arrow{color:#8b9089;font-size:20px}
+    .chat{display:flex;flex-direction:column;gap:24px}.chat:not(:has(.empty)){padding-top:8px}.message{display:flex;gap:12px;line-height:1.7}.avatar{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:0 0 34px;font-size:12px;font-weight:700}.user{justify-content:flex-end}.user .avatar{order:2;background:#dce8da;color:#315638}.assistant .avatar{background:var(--accent);color:#fff}.bubble{max-width:calc(100% - 46px);white-space:pre-wrap}.user .bubble{background:#f0f1ee;border:0;border-radius:15px 4px 15px 15px;padding:12px 16px}.assistant .bubble{background:#fff;border:1px solid var(--line);border-radius:4px 15px 15px 15px;padding:18px;flex:1;box-shadow:0 3px 12px #31433108}
+    .evidence{display:grid;gap:10px;margin-top:18px}.evidence-card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}.evidence-title{font-weight:700;margin-bottom:6px;color:var(--accent-dark)}.meta{font-size:12px;color:var(--muted)}.tag{display:inline-block;background:var(--accent-soft);color:var(--accent-dark);border-radius:5px;padding:3px 8px;font-size:12px;margin:8px 6px 0 0}.notice{background:var(--warn);border:1px solid #f0d9a7;border-radius:9px;padding:12px 14px;margin-top:12px;color:#805914}.inquiry-button{margin-top:14px;border:1px solid #aebfad;background:#fff;color:var(--accent-dark);border-radius:8px;padding:8px 12px;cursor:pointer;font-weight:700}.inquiry-button:hover{background:#f3f8f1}.quick-links{margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}.quick-links-title{font-size:12px;color:var(--muted);margin-bottom:8px}.quick-links-list{display:flex;flex-wrap:wrap;gap:8px}.quick-link{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;color:#515650;border-radius:8px;padding:6px 10px;font-size:12px;text-decoration:none}.quick-link:hover{border-color:#9fb59c;color:var(--accent-dark)}
+    .right-panel{position:sticky;top:0;height:100vh;border-left:1px solid var(--line);background:#fdfdfc;padding:25px 20px;overflow:auto}.panel-head{display:flex;align-items:center;margin-bottom:24px}.panel-head h2{font-size:19px;margin:0}.panel-head span{margin-left:auto;color:#7b817a}.as-of{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:13px;margin-bottom:16px}.panel-doc{border:1px solid var(--line);background:#fff;border-radius:13px;padding:16px}.panel-doc-head{display:flex;gap:11px;align-items:center}.doc-icon{width:34px;height:40px;border:1.5px solid #777f77;border-radius:6px;display:grid;place-items:center;font-size:17px}.panel-doc strong{font-size:14px}.panel-doc small{display:block;color:var(--muted);margin-top:4px}.panel-evidence-list{display:grid;gap:9px;margin-top:14px}.panel-evidence-item{padding-top:11px;border-top:1px solid #edf0eb;font-size:12px;line-height:1.5}.panel-evidence-item b{display:block;color:var(--accent-dark);margin-bottom:2px}.panel-note{border-top:1px solid var(--line);margin-top:22px;padding-top:18px;color:var(--muted);font-size:12px;line-height:1.6;display:flex;gap:9px}.panel-note span{color:var(--accent);font-weight:700}
+    .sources{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:18px;padding-top:12px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}.sources a{color:var(--accent-dark);text-decoration:none;border-bottom:1px solid #abc0a8}.sources a:hover{color:#1e4726}
+    .hero.hidden{display:none}.empty{display:none}.inquiry-history{display:none;margin-top:32px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px}.inquiry-history.visible{display:block}.inquiry-history h3{margin:0 0 10px;font-size:16px}.history-row{border-top:1px solid var(--line);padding:11px 0;font-size:13px}.history-status{color:#34703e;font-weight:700}.secondary{border:1px solid var(--line);background:#fff;border-radius:8px;padding:9px 14px;cursor:pointer}
+    .inquiry-panel{position:fixed;inset:0;background:#17201766;display:grid;place-items:center;padding:20px;z-index:20}.inquiry-card{width:min(680px,100%);max-height:90vh;overflow:auto;background:#fff;border-radius:16px;padding:24px;box-shadow:0 18px 60px #13201438}.inquiry-card h2{margin:0 0 18px}.inquiry-card label{display:block;font-weight:700;font-size:13px;margin:12px 0 6px}.inquiry-card input,.inquiry-card textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:10px;outline-color:#6c8d6b}.inquiry-card textarea{min-height:260px;resize:vertical}.inquiry-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+    .composer-wrap{position:fixed;left:264px;right:316px;bottom:0;z-index:4;background:linear-gradient(transparent,var(--bg) 25%);padding:36px 28px 20px}.context-chips{display:flex;justify-content:center;gap:8px;margin-bottom:10px}.context-chip{background:#eef2ec;color:#556255;border-radius:20px;padding:5px 11px;font-size:11px}.composer{width:min(850px,100%);margin:auto;background:#fff;border:1px solid #d9ddd6;border-radius:18px;box-shadow:0 8px 28px #27392714;display:flex;align-items:flex-end;padding:11px 11px 11px 17px}.attach{border:0;background:#f3f4f1;border-radius:50%;width:34px;height:34px;font-size:21px;margin-right:12px;cursor:pointer}.composer textarea{border:0;outline:0;resize:none;overflow-y:hidden;flex:1;min-height:34px;max-height:130px;line-height:1.5;padding:6px 0;background:transparent}.send{border:0;background:var(--accent-dark);color:#fff;border-radius:50%;width:38px;height:38px;cursor:pointer;font-size:20px;display:grid;place-items:center}.send:disabled{background:#c9cdc7;cursor:not-allowed}.hint{width:min(850px,100%);margin:9px auto 0;text-align:center;color:#858a83;font-size:11px}
+    @media(max-width:1120px){.content-grid{grid-template-columns:1fr}.right-panel{display:none}.composer-wrap{right:0}.main-content{width:min(850px,calc(100% - 56px))}}
+    @media(max-width:760px){.sidebar{display:none}.workspace{margin-left:0}.mobile-top{height:58px;display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid var(--line);background:#f7faf5;position:sticky;top:0;z-index:6}.mobile-top .mark{width:32px;height:32px;font-size:15px}.mobile-top .brand{font-size:15px}.main-content{width:calc(100% - 30px);padding:35px 0 175px}.hero{min-height:auto;padding:45px 0}.hero h1{font-size:27px}.hero>p{font-size:14px;line-height:1.6}.suggestions{grid-template-columns:1fr}.composer-wrap{left:0;padding:30px 14px 14px}.context-chips{display:none}.hint{font-size:10px}.message{gap:8px}.avatar{width:30px;height:30px;flex-basis:30px}.bubble{max-width:calc(100% - 38px)}.inquiry-card{padding:18px}.inquiry-actions{flex-wrap:wrap}}
   </style>
 </head>
 <body>
   <div class="app">
-    <header class="top"><div class="mark">복</div><div class="brand">사내 복리후생 통합 상담</div><div class="status">규정 기반 상담</div></header>
-    <main>
-      <section class="hero"><h1>무엇이 궁금하신가요?</h1><p>국내·외 출장 및 부임, 경조금, 숙소지원금, 동호회 관련 내용을 자유롭게 질문해 주세요.</p></section>
-      <section id="chat" class="chat"><div class="empty">질문을 입력하면 관련 규정을 찾아 답변해 드립니다.</div></section>
-      <section class="inquiry-history"><h3>문의 내역</h3><div id="inquiry-list" class="meta">아직 발송 요청 내역이 없습니다.</div></section>
-    </main>
-    <div class="composer-wrap">
-      <form id="form" class="composer"><textarea id="question" rows="1" placeholder="질문 예시를 불러오는 중..." aria-label="질문 입력"></textarea><button id="send" class="send" type="submit">전송</button></form>
-      <div class="hint">답변은 참고용이며 최종 승인·지급 여부는 담당 부서의 규정 및 서류 검토에 따릅니다.</div>
+    <aside class="sidebar" aria-label="주 메뉴">
+      <div class="brand-row"><div class="mark">복</div><div class="brand">복리후생 AI 상담</div><button class="collapse" type="button" aria-label="사이드바 접기">‹</button></div>
+      <button class="new-chat" type="button"><span>＋</span>새 상담</button>
+      <nav>
+        <div class="nav-section"><div class="nav-title">주요 메뉴</div>
+          <button class="nav-item active" type="button" data-action="new"><span class="nav-icon">✎</span>새 상담</button>
+          <button class="nav-item" type="button" data-action="review"><span class="nav-icon">▣</span>적정성 검토<span class="badge">준비 중</span></button>
+          <button class="nav-item" type="button" data-action="history"><span class="nav-icon">◷</span>문의 내역</button>
+        </div>
+        <hr class="sidebar-rule">
+        <div class="nav-section"><div class="nav-title">복리후생 제도</div>
+          <button class="nav-item benefit-link" type="button" data-question="서울에서 포항으로 교육을 가는데 교통비 지원 기준을 알려줘"><span class="nav-icon">✈</span>출장·여비</button>
+          <button class="nav-item benefit-link" type="button" data-question="경조금 신청 기한과 필요한 서류를 알려줘"><span class="nav-icon">♧</span>경조금</button>
+          <button class="nav-item benefit-link" type="button" data-question="숙소지원금 대상과 신청 조건을 알려줘"><span class="nav-icon">⌂</span>숙소지원금</button>
+          <button class="nav-item benefit-link" type="button" data-question="동호회 지원 조건과 신청 절차를 알려줘"><span class="nav-icon">♙</span>동호회</button>
+        </div>
+        <hr class="sidebar-rule">
+        <div class="nav-section"><div class="nav-title">최근 상담</div><div class="recent-list">
+          <div class="recent-item">출장비 지급 범위 문의<small>최근 상담</small></div>
+          <div class="recent-item">경조금 신청 서류 안내<small>최근 상담</small></div>
+        </div></div>
+      </nav>
+      <div class="profile"><div class="profile-avatar">김</div><div class="profile-copy"><strong>김정훈</strong><small>화면 예시 · SSO 미연결</small></div><span class="profile-arrow">›</span></div>
+    </aside>
+    <div class="workspace">
+      <header class="mobile-top"><div class="mark">복</div><div class="brand">복리후생 AI 상담</div></header>
+      <div class="content-grid">
+        <main class="main-content">
+          <section class="hero" id="hero">
+            <div class="assistant-mark" aria-hidden="true"><i></i><i></i></div>
+            <h1>무엇을 도와드릴까요?</h1>
+            <p>사내 규정을 근거로 복리후생 상담과 신청 전 검토를 도와드립니다.</p>
+            <div class="suggestions">
+              <button class="suggestion" type="button" data-question="서울에서 포항으로 교육을 가는데 교통비 지원 기준을 알려줘"><span class="suggestion-icon">✈</span><span><strong>출장비 기준 확인</strong><small>출장·여비의 지급 기준과 한도를 확인해 보세요.</small></span><span class="suggestion-arrow">›</span></button>
+              <button class="suggestion" type="button" data-question="경조금 신청 기한과 필요한 서류를 알려줘"><span class="suggestion-icon">♧</span><span><strong>경조금 신청 기한</strong><small>대상별 지원 내용과 신청 기한을 확인해 보세요.</small></span><span class="suggestion-arrow">›</span></button>
+              <button class="suggestion" type="button" data-question="숙소지원금 대상과 신청 조건을 알려줘"><span class="suggestion-icon">⌂</span><span><strong>숙소지원 대상</strong><small>지원 대상과 신청 조건을 알아보세요.</small></span><span class="suggestion-arrow">›</span></button>
+              <button class="suggestion" type="button" data-question="동호회 지원 조건과 신청 절차를 알려줘"><span class="suggestion-icon">♙</span><span><strong>동호회 지원 조건</strong><small>동호회 지원 기준과 신청 절차를 확인해 보세요.</small></span><span class="suggestion-arrow">›</span></button>
+            </div>
+          </section>
+          <section id="chat" class="chat"><div class="empty">질문을 입력하면 관련 규정을 찾아 답변해 드립니다.</div></section>
+          <section id="inquiry-history" class="inquiry-history"><h3>문의 내역</h3><div id="inquiry-list" class="meta">아직 발송 요청 내역이 없습니다.</div></section>
+        </main>
+        <aside class="right-panel" aria-label="근거 확인">
+          <div class="panel-head"><h2>근거 확인</h2><span>‹</span></div>
+          <div class="as-of">▣ <span>기준일 <b id="as-of-date"></b></span></div>
+          <div class="panel-doc"><div class="panel-doc-head"><div class="doc-icon">▤</div><div><strong id="panel-doc-title">상담 근거 대기 중</strong><small id="panel-doc-subtitle">질문을 입력하면 관련 규정을 표시합니다.</small></div></div><div id="panel-evidence-list" class="panel-evidence-list"></div></div>
+          <div class="panel-note"><span>ⓘ</span><div>답변마다 적용 규정과 조항을 표시합니다.<br>시행일이 확인되지 않은 문서는 별도로 안내합니다.</div></div>
+        </aside>
+      </div>
+      <div class="composer-wrap">
+        <div class="context-chips"><span class="context-chip">▤ 규정 기반 상담</span><span class="context-chip">♢ 최종 승인은 담당 부서</span></div>
+        <form id="form" class="composer"><button class="attach" type="button" aria-label="파일 첨부 준비 중">＋</button><textarea id="question" rows="1" placeholder="질문 예시를 불러오는 중..." aria-label="질문 입력"></textarea><button id="send" class="send" type="submit" aria-label="전송">↑</button></form>
+        <div class="hint">AI 답변은 참고용이며 최종 승인·지급 여부는 담당 부서의 규정 및 서류 검토에 따릅니다.</div>
+      </div>
     </div>
   </div>
   <script>
@@ -41,9 +98,15 @@
 
     const form=document.querySelector('#form'), input=document.querySelector('#question'), chat=document.querySelector('#chat'), send=document.querySelector('#send');
     const conversation=[];
-    const examples=['아버지가 1966년생인데 회갑 경조금 대상인가요?','2026년 8월 31일에 발생한 경조금은 언제까지 신청해야 하나요?','서울에서 포항으로 교육을 가는데 토요일 기차비가 지원되나요?','동호회 활동보조금은 어떤 조건에서 받을 수 있나요?','숙소지원금은 발령 후 언제까지 신청해야 하나요?','해외출장 숙박비와 소액경비 기준을 알려줘'];
-    // 방문할 때마다 규정 범위 안의 질문 예시를 무작위로 보여줍니다.
-    input.placeholder='예: '+examples[Math.floor(Math.random()*examples.length)];
+    input.placeholder='복리후생 제도나 신청 조건을 물어보세요';
+    send.disabled=true;
+    document.querySelector('#as-of-date').textContent=new Intl.DateTimeFormat('ko-KR',{year:'numeric',month:'numeric',day:'numeric'}).format(new Date());
+    // 빠른 질문은 입력창에 내용을 채우고 바로 상담을 시작합니다.
+    document.querySelectorAll('[data-question]').forEach(button=>button.addEventListener('click',()=>{input.value=button.dataset.question;input.dispatchEvent(new Event('input'));form.requestSubmit()}));
+    document.querySelector('.attach').addEventListener('click',()=>alert('파일 첨부 기능은 준비 중입니다. 현재는 질문을 직접 입력해 주세요.'));
+    document.querySelector('[data-action="review"]').addEventListener('click',()=>alert('적정성 검토는 결정론적 검토 엔진과 함께 제공될 예정입니다. 현재는 상담 기능을 이용해 주세요.'));
+    document.querySelector('[data-action="history"]').addEventListener('click',()=>{const history=document.querySelector('#inquiry-history');history.classList.add('visible');history.scrollIntoView({behavior:'smooth',block:'center'})});
+    document.querySelectorAll('.new-chat,[data-action="new"]').forEach(button=>button.addEventListener('click',resetChat));
     input.addEventListener('input',()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,130)+'px';send.disabled=!input.value.trim()});
     // 엔터는 전송하고, 여러 줄 질문이 필요할 때는 Shift+Enter를 사용합니다.
     // 한글 조합 중 엔터는 무시합니다. IME는 조합 확정 전에 Enter를 먼저 보내므로,
@@ -52,7 +115,8 @@
     input.addEventListener('keydown',event=>{if(event.isComposing||event.keyCode===229)return;if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();if(input.value.trim()&&!send.disabled)form.requestSubmit()}});
     form.addEventListener('submit',async e=>{e.preventDefault();const q=input.value.trim();if(!q)return;addUser(q);conversation.push({role:'user',content:q});input.value='';input.style.height='auto';send.disabled=true;addTyping();const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),50000);try{const response=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,history:conversation.slice(0,-1)}),signal:controller.signal});const data=await response.json();removeTyping();if(!response.ok)throw new Error(data.error||'상담 처리 중 오류가 발생했습니다.');addAnswer(data.answer,data.evidence,data.ui_actions);conversation.push({role:'assistant',content:data.answer})}catch(error){removeTyping();conversation.pop();addError(error.name==='AbortError'?'응답 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.':error.message)}finally{clearTimeout(timeout);send.disabled=false}});
 
-    function addUser(text){const empty=chat.querySelector('.empty');if(empty)empty.remove();chat.insertAdjacentHTML('beforeend',`<div class="message user"><div class="avatar">나</div><div class="bubble">${escapeHtml(text)}</div></div>`);window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'})}
+    function resetChat(){conversation.splice(0);chat.innerHTML='<div class="empty">질문을 입력하면 관련 규정을 찾아 답변해 드립니다.</div>';document.querySelector('#hero').classList.remove('hidden');document.querySelector('#inquiry-history').classList.remove('visible');input.value='';input.style.height='auto';send.disabled=true;updateEvidencePanel([]);window.scrollTo({top:0,behavior:'smooth'});input.focus()}
+    function addUser(text){document.querySelector('#hero').classList.add('hidden');const empty=chat.querySelector('.empty');if(empty)empty.remove();chat.insertAdjacentHTML('beforeend',`<div class="message user"><div class="avatar">나</div><div class="bubble">${escapeHtml(text)}</div></div>`);window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'})}
     function addTyping(){chat.insertAdjacentHTML('beforeend',`<div id="typing" class="message assistant"><div class="avatar">AI</div><div class="bubble">답변을 준비하고 있습니다...</div></div>`)}
     function removeTyping(){const typing=document.querySelector('#typing');if(typing)typing.remove()}
     function addError(text){chat.insertAdjacentHTML('beforeend',`<div class="message assistant"><div class="avatar">AI</div><div class="bubble"><div class="notice">⚠ ${escapeHtml(text)}</div></div></div>`)}
@@ -65,6 +129,7 @@
       const quickLinks=travelQuestion?`<div class="quick-links"><div class="quick-links-title">출장 관련 바로가기</div><div class="quick-links-list"><a class="quick-link" href="https://map.naver.com/" target="_blank" rel="noopener noreferrer">⌖ 네이버지도 ↗</a><a class="quick-link" href="http://www.smbs.biz/ExRate/TodayExRate.jsp" target="_blank" rel="noopener noreferrer">▥ 서울외환중개 ↗</a><a class="quick-link" href="https://www.korail.com/ticket/search/general" target="_blank" rel="noopener noreferrer">▣ 코레일 ↗</a><a class="quick-link" href="https://www.yeogi.com/" target="_blank" rel="noopener noreferrer">▢ 여기어때 ↗</a></div></div>`:'';
       const clubApplicationButton=(uiActions||[]).includes('club_application_draft')?`<button class="inquiry-button club-application-button">동호회 신청 메일 작성</button>`:'';
       chat.insertAdjacentHTML('beforeend',`<div class="message assistant"><div class="avatar">AI</div><div class="bubble">${renderAnswer(cleanAnswer)}${sourceLinks}${quickLinks}<br>${clubApplicationButton}<button class="inquiry-button" data-inquiry="${inquiryData}">담당자에게 문의하기</button></div></div>`);window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
+      updateEvidencePanel(evidence||[]);
       return;
       /* 기존 브라우저 내장 답변 로직은 백엔드 LLM 답변으로 대체되었습니다. */
       /*
@@ -92,6 +157,14 @@
         .replace(/^#{1,6}\s*(.+)$/gm,'<strong>$1</strong>')
         .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
         .replace(/^\s*[-*]\s+/gm,'• ');
+    }
+    function updateEvidencePanel(evidence){
+      const title=document.querySelector('#panel-doc-title'),subtitle=document.querySelector('#panel-doc-subtitle'),list=document.querySelector('#panel-evidence-list');
+      const sources=[...new Set((evidence||[]).map(item=>item.file).filter(Boolean))];
+      if(!sources.length){title.textContent='상담 근거 대기 중';subtitle.textContent='질문을 입력하면 관련 규정을 표시합니다.';list.innerHTML='';return}
+      title.textContent=sources.length===1?sources[0].replace(/\.(txt|md)$/,''):`관련 규정 ${sources.length}건`;
+      subtitle.textContent='현재 답변에 사용된 규정';
+      list.innerHTML=sources.map(file=>`<div class="panel-evidence-item"><b>${escapeHtml(file.replace(/\.(txt|md)$/,''))}</b><span>적용 조항과 시행일은 원문 링크에서 확인하세요.</span></div>`).join('');
     }
     chat.addEventListener('click',event=>{const clubButton=event.target.closest('.club-application-button');if(clubButton){openClubApplicationDraft();return}const button=event.target.closest('.inquiry-button');if(!button)return;openInquiry(JSON.parse(decodeURIComponent(button.dataset.inquiry)))});
     async function openClubApplicationDraft(){const response=await fetch('/api/club-applications/draft',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});const draft=await response.json();if(!response.ok){alert(draft.error||'동호회 신청 메일 초안을 만들지 못했습니다.');return}openInquiry(draft)}
