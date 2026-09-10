@@ -121,14 +121,15 @@
       const travelQuestion=/(출장|여비|기차|철도|열차|교통비|환율|외환|숙박비|부임비|이전비|교육|연수)/.test(currentQuestion);
       const quickLinks=travelQuestion?`<div class="quick-links"><div class="quick-links-title">출장 관련 바로가기</div><div class="quick-links-list"><a class="quick-link" href="https://map.naver.com/" target="_blank" rel="noopener noreferrer">⌖ 네이버지도 ↗</a><a class="quick-link" href="http://www.smbs.biz/ExRate/TodayExRate.jsp" target="_blank" rel="noopener noreferrer">▥ 서울외환중개 ↗</a><a class="quick-link" href="https://www.korail.com/ticket/search/general" target="_blank" rel="noopener noreferrer">▣ 코레일 ↗</a><a class="quick-link" href="https://www.yeogi.com/" target="_blank" rel="noopener noreferrer">▢ 여기어때 ↗</a></div></div>`:'';
       const clubApplicationButton=(uiActions||[]).includes('club_application_draft')?`<button class="inquiry-button club-application-button">동호회 신청 메일 작성</button>`:'';
-      // 후보(options)가 있으면 클릭 한 번으로 그 값을 입력창에 바로 채우고, 없으면(생년월일·
-      // 금액처럼 사람마다 다른 값) "항목: "만 채워 사용자가 값을 이어 쓰게 합니다. 어느 쪽이든
-      // 자유 문장이 아니라 "항목: 값" 형태로 남아 다음 판정이 어떤 되물음에 대한 답인지 헷갈리지 않습니다.
-      const missingChips=(missing||[]).length?`<div class="missing-chips">${missing.map(item=>{
+      // 후보(options)가 있으면 클릭 한 번으로 그 값을, 없으면(생년월일·금액처럼 사람마다 다른 값)
+      // "항목: "만 입력창에 채웁니다. 되물은 항목이 여러 개면 그룹마다 하나씩 눌러 한 입력창에
+      // "항목1: 값1, 항목2: 값2"로 모을 수 있어야 하므로, 항목별 선택 상태를 data-selections에
+      // 저장해두고 매 클릭마다 전체를 다시 조립합니다(그냥 덮어쓰면 먼저 누른 항목이 지워집니다).
+      const missingChips=(missing||[]).length?`<div class="missing-chips" data-selections="{}">${missing.map(item=>{
         const label=escapeHtml(item.label||'');
         const options=item.options||[];
-        if(options.length)return `<span class="missing-group"><span class="missing-label">${label}</span>${options.map(option=>`<button type="button" class="missing-chip" data-value="${escapeHtml(option)}">${escapeHtml(option)}</button>`).join('')}</span>`;
-        return `<button type="button" class="missing-chip" data-fill="${label}: ">${label}</button>`;
+        if(options.length)return `<span class="missing-group"><span class="missing-label">${label}</span>${options.map(option=>`<button type="button" class="missing-chip" data-label="${label}" data-value="${escapeHtml(option)}">${escapeHtml(option)}</button>`).join('')}</span>`;
+        return `<button type="button" class="missing-chip" data-label="${label}" data-fill="">${label}</button>`;
       }).join('')}</div>`:'';
       chat.insertAdjacentHTML('beforeend',`<div class="message assistant"><div class="avatar">AI</div><div class="bubble">${renderAnswer(cleanAnswer)}${sourceLinks}${missingChips}${quickLinks}<br>${clubApplicationButton}<button class="inquiry-button" data-inquiry="${inquiryData}">담당자에게 문의하기</button></div></div>`);window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
       updateEvidencePanel(evidence||[]);
@@ -168,7 +169,21 @@
       subtitle.textContent='현재 답변에 사용된 규정';
       list.innerHTML=sources.map(file=>`<div class="panel-evidence-item"><b>${escapeHtml(file.replace(/\.(txt|md)$/,''))}</b><span>적용 조항과 시행일은 원문 링크에서 확인하세요.</span></div>`).join('');
     }
-    chat.addEventListener('click',event=>{const clubButton=event.target.closest('.club-application-button');if(clubButton){openClubApplicationDraft();return}const chip=event.target.closest('.missing-chip');if(chip){input.value=chip.dataset.value!==undefined?chip.dataset.value:chip.dataset.fill;input.dispatchEvent(new Event('input'));input.focus();input.setSelectionRange(input.value.length,input.value.length);return}const button=event.target.closest('.inquiry-button');if(!button)return;openInquiry(JSON.parse(decodeURIComponent(button.dataset.inquiry)))});
+    // 되물은 항목이 여러 개면 그룹마다 하나씩 눌러 답을 모아야 하므로, 클릭할 때마다 입력창을
+    // 통째로 덮어쓰지 않고 이 칩 묶음의 선택 상태(data-selections)에 반영한 뒤 전체를 다시 조립합니다.
+    // 사용자가 손으로 입력창을 고쳐놓은 뒤 다른 칩을 누르면 그 수정분은 사라집니다 — 알려진 한계입니다.
+    function applyMissingChip(chip){
+      const container=chip.closest('.missing-chips');
+      let selections={};
+      try{selections=JSON.parse(container.dataset.selections||'{}')}catch(error){}
+      selections[chip.dataset.label]=chip.dataset.value!==undefined?chip.dataset.value:'';
+      container.dataset.selections=JSON.stringify(selections);
+      input.value=Object.entries(selections).map(([label,value])=>`${label}: ${value}`).join(', ');
+      input.dispatchEvent(new Event('input'));
+      input.focus();
+      input.setSelectionRange(input.value.length,input.value.length);
+    }
+    chat.addEventListener('click',event=>{const clubButton=event.target.closest('.club-application-button');if(clubButton){openClubApplicationDraft();return}const chip=event.target.closest('.missing-chip');if(chip){applyMissingChip(chip);return}const button=event.target.closest('.inquiry-button');if(!button)return;openInquiry(JSON.parse(decodeURIComponent(button.dataset.inquiry)))});
     async function openClubApplicationDraft(){const response=await fetch('/api/club-applications/draft',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});const draft=await response.json();if(!response.ok){alert(draft.error||'동호회 신청 메일 초안을 만들지 못했습니다.');return}openInquiry(draft)}
     async function openInquiry(data){
       const draft=data.body?data:await (await fetch('/api/inquiries/draft',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})).json();
