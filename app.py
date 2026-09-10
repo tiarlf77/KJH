@@ -695,6 +695,11 @@ GROUNDEDNESS_INSTRUCTIONS = (
     "사용자가 아는 것이다. '회사가 인정하는지', '승인이 나는지', '규정상 가능한지'처럼 "
     "담당 부서의 판단이 필요한 항목은 missing이 아니다. 그것은 사용자가 물은 질문 자체이므로 "
     "되물으면 대화가 제자리를 돈다. 그런 항목만 남는다면 clarify가 아니라 escalate다.\n"
+    "missing의 각 항목은 {\"label\": 되물을 내용, \"options\": 흔한 답 후보} 형태다. "
+    "options는 사용자가 클릭 한 번으로 답할 수 있도록 짧은 후보를 2~4개 넣는다. "
+    "예를 들어 관계를 물으면 ['본인 부모', '배우자 부모'], 출장 형태를 물으면 "
+    "['당일출장', '1박 이상 출장']처럼 넣는다. 생년월일·금액·날짜처럼 사람마다 값이 달라 "
+    "후보를 미리 정할 수 없으면 options는 빈 배열로 둔다. 근거에 없는 후보를 지어내지 않는다.\n"
     "이전 대화가 함께 주어지면 그 안에서 이미 되물은 항목과 사용자가 답한 사실을 확인한다. "
     "표현을 바꿔서 다시 묻지 않는다. 같은 것을 두 번 물어야 할 상황이면 이미 답을 받은 것이므로 "
     "clarify가 아니라 answerable 또는 escalate로 판정한다.\n"
@@ -715,7 +720,8 @@ GROUNDEDNESS_INSTRUCTIONS = (
     "기한이 지났다거나 원칙은 무엇이고 어떤 예외가 남았는지처럼 사용자가 바로 알아야 할 내용이다. "
     "확정할 수 있는 것이 없으면 빈 문자열.\n"
     "JSON만 출력한다. 형식: "
-    '{"verdict": "answerable|clarify|escalate", "reason": "한 문장", "missing": ["질문에 빠진 정보"], '
+    '{"verdict": "answerable|clarify|escalate", "reason": "한 문장", '
+    '"missing": [{"label": "질문에 빠진 정보", "options": ["짧은 답 후보"]}], '
     '"finding": "이미 확정되는 사실", '
     '"intent": "ceremony|housing|relocation|trip|club|other", "relation": "관계 또는 null"}'
 )
@@ -776,9 +782,20 @@ def judge_groundedness(question, evidence, history=None):
         # 의도를 못 뽑으면 규칙을 걸러내지 않고 기존 키워드 판별에 맡깁니다.
         result["intent"] = None
     result.setdefault("reason", "")
-    result.setdefault("missing", [])
     result.setdefault("relation", None)
     result.setdefault("finding", "")
+    # 판정이 지시를 안 따르고 missing을 예전처럼 문자열로 줄 수도 있어 형태를 맞춘다.
+    normalized = []
+    for item in result.get("missing", []):
+        if isinstance(item, dict):
+            label = str(item.get("label", "")).strip()
+            options = [str(option).strip() for option in item.get("options", []) if str(option).strip()]
+        else:
+            label = str(item).strip()
+            options = []
+        if label:
+            normalized.append({"label": label, "options": options[:4]})
+    result["missing"] = normalized
     return result
 
 
@@ -850,7 +867,7 @@ class ConsultationState(TypedDict, total=False):
     analysis: dict
     answer: str
     ui_actions: list[str]
-    missing: list[str]
+    missing: list[dict]
 
 
 def resolve_question_node(state: ConsultationState):
@@ -883,7 +900,7 @@ def build_clarify_answer(missing, finding=""):
         lines = ["문의하신 제도는 확인했지만, 답변을 확정하려면 정보가 조금 더 필요합니다.\n"]
     if missing:
         lines.append("확인이 필요한 내용")
-        lines.extend(f"- {item}" for item in missing[:4])
+        lines.extend(f"- {item['label']}" for item in missing[:4])
         lines.append("")
         closing = "위 내용을 알려주시면 해당 기준으로 안내해 드리겠습니다. "
     else:

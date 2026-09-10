@@ -303,13 +303,14 @@ def check_missing_chips():
 
     LLM 판정 없이 analysis를 직접 채워 넣으므로 API 없이도 깨집니다.
     """
+    items = [{"label": label, "options": []} for label in ("a", "b", "c", "d", "e")]
     state = {
         "question": "숙소지원금 얼마 받을 수 있나요?",
         "evidence": [{"file": "숙소지원금 운영 기준.md"}],
-        "analysis": {"verdict": "clarify", "missing": ["a", "b", "c", "d", "e"], "finding": ""},
+        "analysis": {"verdict": "clarify", "missing": items, "finding": ""},
     }
     result = generate_answer_node(state)
-    assert result.get("missing") == ["a", "b", "c", "d"], f"칩은 4개까지만 실어야 합니다: {result.get('missing')}"
+    assert result.get("missing") == items[:4], f"칩은 4개까지만 실어야 합니다: {result.get('missing')}"
 
     # escalate는 되물을 항목이 없으므로 missing 키 자체가 없어야 합니다(빈 리스트로 칩이
     # 빈 채 뜨는 것과 구분). call_openai를 부르지 않는 verdict라 API 키 없이도 확인됩니다.
