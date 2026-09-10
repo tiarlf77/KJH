@@ -7,7 +7,7 @@
 태워 보세요. 총계는 게이트가 아니라 표본 점검으로 읽는 것이 맞습니다.
 """
 
-from app import CONSULTATION_GRAPH, attach_referenced_chunks, load_env, resolve_question
+from app import CONSULTATION_GRAPH, attach_referenced_chunks, generate_answer_node, load_env, resolve_question
 
 # 키를 읽지 않으면 LLM 경로 사례가 전부 담당 부서 이관으로 떨어져 검증이 되지 않습니다.
 load_env()
@@ -298,9 +298,31 @@ def check_reference_expansion():
     print("통과 [D-01] 참조 확장(별첨 지목·나열 제외·중복 방지)")
 
 
+def check_missing_chips():
+    """clarify 판정일 때만 missing이 화면 칩용으로 4개까지 실려 나가는지 확인합니다.
+
+    LLM 판정 없이 analysis를 직접 채워 넣으므로 API 없이도 깨집니다.
+    """
+    state = {
+        "question": "숙소지원금 얼마 받을 수 있나요?",
+        "evidence": [{"file": "숙소지원금 운영 기준.md"}],
+        "analysis": {"verdict": "clarify", "missing": ["a", "b", "c", "d", "e"], "finding": ""},
+    }
+    result = generate_answer_node(state)
+    assert result.get("missing") == ["a", "b", "c", "d"], f"칩은 4개까지만 실어야 합니다: {result.get('missing')}"
+
+    # escalate는 되물을 항목이 없으므로 missing 키 자체가 없어야 합니다(빈 리스트로 칩이
+    # 빈 채 뜨는 것과 구분). call_openai를 부르지 않는 verdict라 API 키 없이도 확인됩니다.
+    escalate_state = {**state, "analysis": {"verdict": "escalate", "reason": "무관한 항목", "missing": [], "intent": "housing"}}
+    result = generate_answer_node(escalate_state)
+    assert "missing" not in result, f"escalate에는 missing이 없어야 합니다: {result}"
+    print("통과 [D-02] missing 칩 개수 제한 및 escalate 시 미포함")
+
+
 def main():
     """보호 동작과 알려진 오답을 실행하고 전체 결과를 요약합니다."""
     check_reference_expansion()
+    check_missing_chips()
     protected = run_cases("A", PROTECTED_CASES)
     unresolved = run_cases("B", KNOWN_FAILURE_CASES)
     continuity = run_cases("C", CONTINUITY_CASES, check_continuity)

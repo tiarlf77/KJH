@@ -850,6 +850,7 @@ class ConsultationState(TypedDict, total=False):
     analysis: dict
     answer: str
     ui_actions: list[str]
+    missing: list[str]
 
 
 def resolve_question_node(state: ConsultationState):
@@ -917,13 +918,15 @@ def generate_answer_node(state: ConsultationState):
     question = state.get("resolved") or state["question"]
     history = state.get("history", [])
     evidence = state.get("evidence", [])
+    missing = []
     if not evidence:
         answer = build_unknown_policy_answer(question)
     else:
         judgement = state.get("analysis") or judge_groundedness(question, evidence, history)
         verdict = judgement["verdict"]
         if verdict == "clarify":
-            answer = build_clarify_answer(judgement.get("missing", []), judgement.get("finding", ""))
+            missing = judgement.get("missing", [])
+            answer = build_clarify_answer(missing, judgement.get("finding", ""))
         elif verdict == "escalate":
             # 복리후생과 무관한 질문은 담당 부서로 넘기지 않고 상담 범위를 안내합니다.
             if judgement.get("intent") == "other":
@@ -936,6 +939,10 @@ def generate_answer_node(state: ConsultationState):
     # 동호회 신규 신청 문의에는 답변 경로와 무관하게 메일 초안 버튼을 띄웁니다.
     if is_club_application_question(question):
         result["ui_actions"] = ["club_application_draft"]
+    # clarify 판정일 때만 채운다. 화면이 이 목록을 클릭형 칩으로 보여줘 사용자가
+    # 어떤 항목에 답하는지 "항목: 값" 형태로 명확히 남기게 한다.
+    if missing:
+        result["missing"] = missing[:4]
     return result
 
 
@@ -1076,6 +1083,7 @@ class Handler(SimpleHTTPRequestHandler):
             result = CONSULTATION_GRAPH.invoke({"question": question, "history": body.get("history", [])})
             self.respond(200, {
                 "answer": result["answer"],
+                "missing": result.get("missing", []),
                 "evidence": display_evidence(result.get("evidence", [])),
                 "ui_actions": result.get("ui_actions", []),
             })
