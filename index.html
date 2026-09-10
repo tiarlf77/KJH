@@ -64,7 +64,7 @@
       const travelQuestion=/(출장|여비|기차|철도|열차|교통비|환율|외환|숙박비|부임비|이전비|교육|연수)/.test(currentQuestion);
       const quickLinks=travelQuestion?`<div class="quick-links"><div class="quick-links-title">출장 관련 바로가기</div><div class="quick-links-list"><a class="quick-link" href="https://map.naver.com/" target="_blank" rel="noopener noreferrer">⌖ 네이버지도 ↗</a><a class="quick-link" href="http://www.smbs.biz/ExRate/TodayExRate.jsp" target="_blank" rel="noopener noreferrer">▥ 서울외환중개 ↗</a><a class="quick-link" href="https://www.korail.com/ticket/search/general" target="_blank" rel="noopener noreferrer">▣ 코레일 ↗</a><a class="quick-link" href="https://www.yeogi.com/" target="_blank" rel="noopener noreferrer">▢ 여기어때 ↗</a></div></div>`:'';
       const clubApplicationButton=(uiActions||[]).includes('club_application_draft')?`<button class="inquiry-button club-application-button">동호회 신청 메일 작성</button>`:'';
-      chat.insertAdjacentHTML('beforeend',`<div class="message assistant"><div class="avatar">AI</div><div class="bubble">${escapeHtml(cleanAnswer)}${sourceLinks}${quickLinks}<br>${clubApplicationButton}<button class="inquiry-button" data-inquiry="${inquiryData}">담당자에게 문의하기</button></div></div>`);window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
+      chat.insertAdjacentHTML('beforeend',`<div class="message assistant"><div class="avatar">AI</div><div class="bubble">${renderAnswer(cleanAnswer)}${sourceLinks}${quickLinks}<br>${clubApplicationButton}<button class="inquiry-button" data-inquiry="${inquiryData}">담당자에게 문의하기</button></div></div>`);window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
       return;
       /* 기존 브라우저 내장 답변 로직은 백엔드 LLM 답변으로 대체되었습니다. */
       /*
@@ -84,6 +84,15 @@
       return `${primary.name} 기준을 확인해 보았습니다.\n\n${facts.map(x=>'• '+x).join('\n')}\n\n질문하신 상황에 정확히 적용하려면 대상·일자·소속·직급·금액 등 추가 정보가 필요할 수 있습니다. 해당 정보가 있으면 조건을 하나씩 대조해 드리겠습니다.`;
     }
     function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+    // 모델이 마크다운을 쓰는 것을 지시로 막는 대신 렌더링합니다. 회차마다 지켜지지 않아서입니다.
+    // 반드시 이스케이프한 뒤에 정규식을 겁니다. 순서를 바꾸면 답변 안의 태그가 살아납니다.
+    // 버블이 white-space:pre-wrap이라 줄바꿈이 유지되므로 목록은 <ul> 없이 가운뎃점으로 충분합니다.
+    function renderAnswer(text){
+      return escapeHtml(text)
+        .replace(/^#{1,6}\s*(.+)$/gm,'<strong>$1</strong>')
+        .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+        .replace(/^\s*[-*]\s+/gm,'• ');
+    }
     chat.addEventListener('click',event=>{const clubButton=event.target.closest('.club-application-button');if(clubButton){openClubApplicationDraft();return}const button=event.target.closest('.inquiry-button');if(!button)return;openInquiry(JSON.parse(decodeURIComponent(button.dataset.inquiry)))});
     async function openClubApplicationDraft(){const response=await fetch('/api/club-applications/draft',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});const draft=await response.json();if(!response.ok){alert(draft.error||'동호회 신청 메일 초안을 만들지 못했습니다.');return}openInquiry(draft)}
     async function openInquiry(data){
