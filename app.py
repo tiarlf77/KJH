@@ -31,8 +31,6 @@ SOURCE_FILES = {
 }
 # 규정의 '회갑'과 사용자가 자주 쓰는 '환갑'을 같은 의미로 처리합니다.
 HOEGAP_TERMS = ("회갑", "환갑")
-# 조사나 어미가 붙어도 규정의 핵심어로 검색해야 하는 표현입니다.
-CANONICAL_QUERY_TERMS = ("결혼", "해외출장")
 
 
 
@@ -248,13 +246,11 @@ def retrieve(question, limit=20):
     query_tokens = tokens(question)
     # 아래에서 넓히기 전의 원문 토큰. 희소 종목어 판정에 씁니다.
     question_tokens = set(query_tokens)
-    compact_question = question.replace(" ", "")
-    for term in CANONICAL_QUERY_TERMS:
-        if term in compact_question:
-            query_tokens.add(term)
-    if any(word in question for word in ("숙소", "숙소지원금", "기존 숙소", "전 근무지", "반납", "정리", "유지")):
-        # 근무지 이동 관련 질문은 5.5 지원특례의 핵심 표현을 함께 검색합니다.
-        query_tokens.update({"전근무지", "숙소정리", "3개월", "최장", "6개월", "처분", "발령"})
+    # 검색어 주입 두 블록을 지웠습니다. 62문항으로 껐다 켜며 재면 이렇습니다.
+    #   결혼·해외출장 주입: 기여 없음(지표 동일)
+    #   숙소 주입:         해로움. 끄면 44문항 MRR 0.762 -> 0.784, 실사용 0.676 -> 0.727
+    # 숙소 블록은 5.5 지원특례 하나를 끌어올리려고 "3개월"·"발령" 같은 흔한 낱말을 넣었는데,
+    # 그 낱말을 담은 무관한 조항까지 전부 점수를 얻어 주변 순위를 흐렸습니다.
     # 호칭 동의어 딕셔너리(QUERY_SYNONYMS)는 지웠습니다. 62문항에서 켠 것과 끈 것의 지표가
     # 소수점까지 같았습니다. VECTOR_WEIGHT를 0.8로 올린 뒤로는 임베딩이 "장인어른 ~ 배우자
     # 부모"를 직접 알아 딕셔너리가 메우던 자리가 없습니다. 손으로 호칭을 채워 넣는 유지보수만
