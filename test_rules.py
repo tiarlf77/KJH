@@ -1,6 +1,6 @@
 """복리후생 상담 규칙의 사용자 관점 동작을 고정하는 회귀 테스트입니다."""
 
-from app import CONSULTATION_GRAPH, load_env
+from app import CONSULTATION_GRAPH, load_env, resolve_question
 
 # 키를 읽지 않으면 LLM 경로 사례가 전부 담당 부서 이관으로 떨어져 검증이 되지 않습니다.
 load_env()
@@ -171,6 +171,46 @@ KNOWN_FAILURE_CASES = [
 ]
 
 
+# 후속 질문이 이전 대화의 사실을 이어받는지는 최종 답변 문구로 재면 회차마다 흔들린다.
+# 재작성된 질문 자체를 확인한다. 낱말 목록으로 주제 전환을 판별하던 때는 "해외출장입니다"의
+# '출장'이 걸려 이력이 통째로 끊겼고, 앞선 일정·경로가 답변에 하나도 반영되지 않았다.
+TRIP_HISTORY = [
+    {
+        "role": "user",
+        "content": (
+            "제 본가가 수도권인 관계로, 9/11(금)에 미리 수도권으로 이동하여 주말을 보낸 뒤 "
+            "9/14(월)에 공항으로 이동하고자 합니다. 상세 일정: 9/11 포항 자택-포항역 택시, "
+            "9/11 포항역-광명역 KTX, 9/14 서울-인천공항 공항버스. "
+            "개인 신용카드로 결제한 후 출장비로 정산하면 되는지 확인 부탁드립니다."
+        ),
+    },
+    {
+        "role": "assistant",
+        "content": (
+            "9/11 개인 사유로 미리 이동해 주말을 보낸 비용은 출장비로 정산하기 어렵고, "
+            "9/14 공항 이동 비용도 해외출장 관련 국내 이동인지 확인이 필요합니다."
+        ),
+    },
+]
+
+# (질문, 이력, 재작성 결과에 있어야 할 문자열들, 없어야 할 문자열들)
+CONTINUITY_CASES = [
+    ("해외출장입니다", TRIP_HISTORY, ["인천공항", "9/14"], []),
+    # 반대 방향도 막는다. 무관한 새 질문에 지난 주제를 끌어오면 안 된다.
+    ("동호회 개설하려면?", TRIP_HISTORY, ["동호회"], ["인천공항", "포항역"]),
+]
+
+
+def check_continuity(question, history, required_texts, forbidden_texts):
+    """후속 입력이 자립형 질문으로 다시 쓰이는지 확인합니다."""
+    resolved = resolve_question(question, history)
+    assert resolved, "재작성 결과가 비어 있습니다."
+    for text in required_texts:
+        assert text in resolved, f"이전 대화의 사실이 빠졌습니다: {text!r} / 결과: {resolved!r}"
+    for text in forbidden_texts:
+        assert text not in resolved, f"무관한 주제가 딸려왔습니다: {text!r} / 결과: {resolved!r}"
+
+
 def check_case(question, required_text, forbidden_text, history=()):
     """전체 상담 그래프에서 필수·금지 문구를 확인합니다."""
     result = CONSULTATION_GRAPH.invoke({"question": question, "history": list(history)})
@@ -184,13 +224,14 @@ def check_case(question, required_text, forbidden_text, history=()):
         assert forbidden_text not in answer, f"금지 문자열이 포함됐습니다: {forbidden_text!r}"
 
 
-def run_cases(group, cases):
+def run_cases(group, cases, checker=check_case):
     """한 그룹의 모든 사례를 실행하고 개별 결과와 합계를 반환합니다."""
     passed = failed = skipped = 0
-    for index, (question, required_text, forbidden_text, *history) in enumerate(cases, 1):
+    for index, case in enumerate(cases, 1):
+        question = case[0]
         case_id = f"{group}-{index:02d}"
         try:
-            check_case(question, required_text, forbidden_text, *history)
+            checker(*case)
         except RuntimeError as error:
             if "OPENAI_API_KEY" in str(error):
                 skipped += 1
@@ -218,11 +259,13 @@ def main():
     """보호 동작과 알려진 오답을 실행하고 전체 결과를 요약합니다."""
     protected = run_cases("A", PROTECTED_CASES)
     unresolved = run_cases("B", KNOWN_FAILURE_CASES)
-    total = tuple(sum(values) for values in zip(protected, unresolved))
+    continuity = run_cases("C", CONTINUITY_CASES, check_continuity)
+    total = tuple(sum(values) for values in zip(protected, unresolved, continuity))
 
     print()
     print(f"(A) 지켜야 할 동작: 통과 {protected[0]} / 실패 {protected[1]} / 건너뜀 {protected[2]}")
     print(f"(B) 아직 미해결: 통과 {unresolved[0]} / 실패 {unresolved[1]} / 건너뜀 {unresolved[2]}")
+    print(f"(C) 대화 연속성: 통과 {continuity[0]} / 실패 {continuity[1]} / 건너뜀 {continuity[2]}")
     print(f"전체: 통과 {total[0]} / 실패 {total[1]} / 건너뜀 {total[2]}")
     raise SystemExit(1 if total[1] else 0)
 

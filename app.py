@@ -613,12 +613,6 @@ def build_death_answer(question):
     return ""
 
 
-def starts_new_policy_topic(question):
-    """이전 대화와 분리해야 하는 새 복리후생 질문인지 판단합니다."""
-    topic_words = ("결혼", "사망", "출산", "동호회", "숙소", "출장", "여비", "부임", "발령", "이사", "부임비", "이전비", "건강검진")
-    return any(word in question for word in topic_words) and not any(term in question for term in HOEGAP_TERMS)
-
-
 def build_clarification_answer(question):
     """제도 유형을 알 수 없는 질문에 전체 상담 범위와 재질문 형식을 안내합니다."""
     return (
@@ -953,10 +947,68 @@ def judge_groundedness(question, evidence):
     return result
 
 
+RESOLVE_INSTRUCTIONS = (
+    "너는 사내 복리후생 상담의 질문 정리기다. 이전 대화와 사용자의 새 입력을 읽고, "
+    "새 입력을 그것만 읽어도 이해되는 하나의 질문으로 다시 쓴다. 답변하지 말고 질문만 만든다.\n"
+    "- 이전 대화에 나온 날짜·장소·금액·관계·이동 경로 등 판단에 필요한 사실을 새 질문에 옮겨 담는다.\n"
+    "- 새 입력이 직전 답변의 확인 요청에 대한 대답이면, 무엇을 확인해 준 것인지 드러나게 쓴다.\n"
+    "- 새 입력이 이전 대화와 무관한 새 질문이면 그대로 둔다. 이전 주제를 끌어오지 않는다.\n"
+    "- 사실을 지어내지 않는다. 이전 대화에 없는 내용은 넣지 않는다.\n"
+    "질문 문장 하나만 출력한다. 설명이나 따옴표를 붙이지 않는다."
+)
+
+
+def resolve_question(question, history):
+    """후속 입력을 이전 대화의 사실을 담은 자립형 질문으로 다시 씁니다.
+
+    낱말 목록으로 새 주제인지 판별하던 방식은 양방향으로 틀렸습니다. "해외출장입니다"는
+    '출장'이 걸려 이력이 끊겼고, "부모님 상당했는데"는 아무것도 안 걸려 지난 주제가 남았습니다.
+    후속인지 아닌지를 코드가 정하지 않고, 다시 쓴 질문 하나를 검색·판정·생성이 함께 씁니다.
+    """
+    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not history or not api_key:
+        return question
+    conversation = [
+        {"role": item["role"], "content": item["content"]}
+        for item in history[-6:]
+        if item.get("role") in ("user", "assistant") and item.get("content")
+    ]
+    if not conversation:
+        return question
+    conversation.append({"role": "user", "content": f"새 입력: {question}"})
+    payload = {
+        "model": MODEL,
+        "reasoning": {"effort": "none"},
+        "instructions": RESOLVE_INSTRUCTIONS,
+        "input": conversation,
+    }
+    request = Request(
+        "https://api.openai.com/v1/responses",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=30) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError, OSError):
+        # 재작성에 실패하면 원문 질문으로 진행합니다. 맥락은 잃어도 답변 경로는 살립니다.
+        return question
+    text = (data.get("output_text") or "").strip()
+    if not text:
+        for output in data.get("output", []):
+            for content in output.get("content", []):
+                if content.get("type") == "output_text":
+                    text += content.get("text", "")
+    text = text.strip().strip('"')
+    return text or question
+
+
 class ConsultationState(TypedDict, total=False):
     """LangGraph가 상담 단계 사이에서 전달하는 최소 상태입니다."""
 
     question: str
+    resolved: str
     history: list[dict]
     intent: str
     evidence: list[dict]
@@ -965,20 +1017,20 @@ class ConsultationState(TypedDict, total=False):
     ui_actions: list[str]
 
 
+def resolve_question_node(state: ConsultationState):
+    """이후 모든 단계가 함께 쓸 자립형 질문을 먼저 만듭니다."""
+    return {"resolved": resolve_question(state["question"], state.get("history", []))}
+
+
 def retrieve_policy_node(state: ConsultationState):
     """현재 제도 질문에 맞는 규정 근거를 검색합니다."""
-    question = state["question"]
-    history = state.get("history", [])
-    # 부족한 정보를 채우는 후속 답변은 그 자체로 주제를 담지 않으므로 직전 질문을 함께 검색합니다.
-    previous = [item.get("content", "") for item in history if item.get("role") == "user"]
-    if previous:
-        question = f"{previous[-1]}\n{question}"
-    return {"evidence": retrieve(question)}
+    return {"evidence": retrieve(state.get("resolved") or state["question"])}
 
 
 def analyze_question_node(state: ConsultationState):
     """검색 근거로 답할 수 있는지와 함께 제도 영역·대상 관계를 한 번에 뽑습니다."""
-    return {"analysis": judge_groundedness(state["question"], state.get("evidence", []))}
+    question = state.get("resolved") or state["question"]
+    return {"analysis": judge_groundedness(question, state.get("evidence", []))}
 
 
 def rule_applies(analysis, *domains):
@@ -1086,8 +1138,9 @@ def build_escalation_answer(reason, evidence):
 
 def generate_answer_node(state: ConsultationState):
     """근거로 답할 수 있는지 먼저 판정하고, 답변·되묻기·이관으로 나눕니다."""
-    question = state["question"]
-    history = [] if starts_new_policy_topic(question) else state.get("history", [])
+    # 재작성된 질문이 이전 대화의 사실을 이미 담고 있으므로 이력을 낱말로 끊지 않습니다.
+    question = state.get("resolved") or state["question"]
+    history = state.get("history", [])
     evidence = state.get("evidence", [])
     if not evidence:
         answer = build_unknown_policy_answer(question)
@@ -1118,12 +1171,14 @@ def generate_answer_node(state: ConsultationState):
 def build_consultation_graph():
     """상담 요청을 분류·검색·규칙판정·생성으로 연결한 LangGraph를 만듭니다."""
     graph = StateGraph(ConsultationState)
+    graph.add_node("resolve", resolve_question_node)
     graph.add_node("retrieve", retrieve_policy_node)
     graph.add_node("analyze", analyze_question_node)
     graph.add_node("rules", apply_policy_rules_node)
     graph.add_node("generate", generate_answer_node)
     # 키워드로 미리 거르지 않고 모든 질문을 검색·판정에 태웁니다.
-    graph.add_edge(START, "retrieve")
+    graph.add_edge(START, "resolve")
+    graph.add_edge("resolve", "retrieve")
     graph.add_edge("retrieve", "analyze")
     graph.add_edge("analyze", "rules")
     graph.add_conditional_edges("rules", choose_after_rules, {"end": END, "generate": "generate"})
