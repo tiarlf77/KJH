@@ -320,7 +320,28 @@ def cosine(left, right):
 
 
 # 코퍼스가 작아 후보를 넓게 주고, 어떤 조항이 답인지는 판정 단계에서 가립니다.
-def retrieve(question, limit=20):
+def focused_evidence_files(question):
+    """현재 질문의 핵심 제도에 맞는 근거 파일만 결정합니다."""
+    compact_question = question.replace(" ", "")
+    if "해외출장" in compact_question:
+        files = {"여비관리기준.md"}
+        has_personal_stay = any(word in question for word in ("개인휴가", "개인 휴가", "개인 일정", "연차", "휴가"))
+        has_return = any(word in question for word in ("귀국", "복귀", "입국", "항공편", "항공권"))
+        if has_personal_stay and has_return:
+            files.add("여비관리 FAQ.md")
+        return files
+    if any(word in question for word in ("국내출장", "국내 출장", "여비", "교통비", "숙박비", "식비", "현지교통비")):
+        return {"여비관리기준.md"}
+    if any(word in question for word in ("숙소", "숙소지원금", "전세", "월세", "임대차")):
+        return {"숙소지원금 운영 기준.md"}
+    if "동호회" in question:
+        return {"동호회 관리 규정.md"}
+    if any(word in question for word in ("결혼", "회갑", "환갑", "출산", "사망", "돌아가", "별세", "승중상")):
+        return {"경조금 지급기준.md"}
+    return None
+
+
+def retrieve(question, limit=20, focus_question=None):
     """Markdown 제목 청크와 기존 텍스트 규정에서 관련 근거를 찾아 반환합니다."""
     query_tokens = tokens(question)
     compact_question = question.replace(" ", "")
@@ -365,6 +386,11 @@ def retrieve(question, limit=20):
             "text": chunk["text"][:3000],
         })
     results.sort(key=lambda item: item["score"], reverse=True)
+    if not results:
+        return []
+    focused_files = focused_evidence_files(focus_question or question)
+    if focused_files:
+        results = [item for item in results if item["file"] in focused_files]
     if not results:
         return []
     # 최고 점수에 근접한 규정 파일만 선택해 다른 제도 설명이 섞이지 않게 합니다.
@@ -1024,7 +1050,12 @@ def resolve_question_node(state: ConsultationState):
 
 def retrieve_policy_node(state: ConsultationState):
     """현재 제도 질문에 맞는 규정 근거를 검색합니다."""
-    return {"evidence": retrieve(state.get("resolved") or state["question"])}
+    return {
+        "evidence": retrieve(
+            state.get("resolved") or state["question"],
+            focus_question=state["question"],
+        )
+    }
 
 
 def analyze_question_node(state: ConsultationState):

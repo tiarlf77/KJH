@@ -1,6 +1,6 @@
 """복리후생 상담 규칙의 사용자 관점 동작을 고정하는 회귀 테스트입니다."""
 
-from app import CONSULTATION_GRAPH, load_env, resolve_question
+from app import CONSULTATION_GRAPH, load_env, resolve_question, retrieve_policy_node
 
 # 키를 읽지 않으면 LLM 경로 사례가 전부 담당 부서 이관으로 떨어져 검증이 되지 않습니다.
 load_env()
@@ -201,6 +201,21 @@ CONTINUITY_CASES = [
 ]
 
 
+# 이전 대화에 숙소 주제가 있었더라도, 현재의 해외출장 전일 이동 확인에는 여비관리기준만
+# 근거로 표시해야 합니다. 이 검증은 LLM 호출 없이 검색 노드의 반환값만 확인합니다.
+EVIDENCE_CASES = [
+    (
+        "해외출장 전일 이동으로 보면 됩니다",
+        (
+            "9월 11일부터 9월 14일까지 수도권에 체류한 뒤 9월 14일 인천공항으로 이동하는 "
+            "일정을 해외출장 전일 이동으로 볼 때, 숙소지원금 운영 기준과 해외출장 비용을 어떻게 적용하나요?"
+        ),
+        {"여비관리기준.md"},
+        {"여비관리 FAQ.md", "숙소지원금 운영 기준.md", "경조금 지급기준.md"},
+    ),
+]
+
+
 def check_continuity(question, history, required_texts, forbidden_texts):
     """후속 입력이 자립형 질문으로 다시 쓰이는지 확인합니다."""
     resolved = resolve_question(question, history)
@@ -209,6 +224,14 @@ def check_continuity(question, history, required_texts, forbidden_texts):
         assert text in resolved, f"이전 대화의 사실이 빠졌습니다: {text!r} / 결과: {resolved!r}"
     for text in forbidden_texts:
         assert text not in resolved, f"무관한 주제가 딸려왔습니다: {text!r} / 결과: {resolved!r}"
+
+
+def check_evidence(question, resolved, expected_files, forbidden_files):
+    """현재 질문의 제도와 무관한 규정 파일이 근거 링크로 노출되지 않는지 확인합니다."""
+    result = retrieve_policy_node({"question": question, "resolved": resolved})
+    files = {item["file"] for item in result["evidence"]}
+    assert files == expected_files, f"근거 파일이 다릅니다: {sorted(files)!r}"
+    assert not files & forbidden_files, f"무관한 근거 파일이 포함됐습니다: {sorted(files & forbidden_files)!r}"
 
 
 def check_case(question, required_text, forbidden_text, history=()):
@@ -260,12 +283,14 @@ def main():
     protected = run_cases("A", PROTECTED_CASES)
     unresolved = run_cases("B", KNOWN_FAILURE_CASES)
     continuity = run_cases("C", CONTINUITY_CASES, check_continuity)
-    total = tuple(sum(values) for values in zip(protected, unresolved, continuity))
+    evidence = run_cases("D", EVIDENCE_CASES, check_evidence)
+    total = tuple(sum(values) for values in zip(protected, unresolved, continuity, evidence))
 
     print()
     print(f"(A) 지켜야 할 동작: 통과 {protected[0]} / 실패 {protected[1]} / 건너뜀 {protected[2]}")
     print(f"(B) 아직 미해결: 통과 {unresolved[0]} / 실패 {unresolved[1]} / 건너뜀 {unresolved[2]}")
     print(f"(C) 대화 연속성: 통과 {continuity[0]} / 실패 {continuity[1]} / 건너뜀 {continuity[2]}")
+    print(f"(D) 근거 링크 적합성: 통과 {evidence[0]} / 실패 {evidence[1]} / 건너뜀 {evidence[2]}")
     print(f"전체: 통과 {total[0]} / 실패 {total[1]} / 건너뜀 {total[2]}")
     raise SystemExit(1 if total[1] else 0)
 
