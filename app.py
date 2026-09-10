@@ -359,6 +359,28 @@ REFERENCE_CHUNK_LIMIT = 2
 REFERENCE_TOTAL_LIMIT = 4
 
 
+# 상담 참고용 문서입니다. 답변 근거로는 쓰되 화면의 "확인한 규정"에는 올리지 않습니다.
+# FAQ는 기준 규정이 아니라 해설이라, 링크로 제시하면 사용자가 근거 조항으로 오인합니다.
+REFERENCE_ONLY_FILES = {"여비관리 FAQ.md"}
+
+
+def display_evidence(evidence):
+    """화면에 표시할 근거만 고릅니다. 답변 생성에 넘기는 근거는 좁히지 않습니다.
+
+    낱말로 검색 자체를 좁히던 focused_evidence_files는 전 지표를 깎아 지웠습니다(44문항
+    MRR 0.760 -> 0.685). 좁혀야 할 곳은 검색이 아니라 표시입니다. 판정과 생성은 여러 규정을
+    함께 보아야 하고, 사용자에게 보이는 근거 링크만 질문이 실제로 걸린 규정 하나로 줄이면
+    둘 다 얻습니다. 파일 선택은 낱말이 아니라 점수로 합니다.
+    """
+    ranked = [item for item in evidence if not item.get("referenced")]
+    # 참고 문서만 남는 질문이라면 숨기지 않습니다. 숨기면 근거 없는 답변으로 보입니다.
+    pool = [item for item in ranked if item["file"] not in REFERENCE_ONLY_FILES] or ranked
+    if not pool:
+        return evidence
+    top_file = max(pool, key=lambda item: item["score"])["file"]
+    return [item for item in evidence if item["file"] == top_file]
+
+
 def attach_referenced_chunks(selected, chunks):
     """근거가 가리키는 별첨·조항을 함께 붙입니다.
 
@@ -1028,7 +1050,7 @@ class Handler(SimpleHTTPRequestHandler):
             result = CONSULTATION_GRAPH.invoke({"question": question, "history": body.get("history", [])})
             self.respond(200, {
                 "answer": result["answer"],
-                "evidence": result.get("evidence", []),
+                "evidence": display_evidence(result.get("evidence", [])),
                 "ui_actions": result.get("ui_actions", []),
             })
         except (ValueError, RuntimeError, HTTPError, URLError) as error:

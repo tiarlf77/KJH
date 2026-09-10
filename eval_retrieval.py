@@ -27,7 +27,7 @@ hit@20이 100%라는 건 판정기가 언제나 정답 조항을 보고 있다�
 
 import sys
 
-from app import load_env, load_policy_index, retrieve
+from app import display_evidence, load_env, load_policy_index, retrieve
 
 load_env()
 
@@ -145,7 +145,9 @@ REAL_CASES = [
 # 옮겨 왔습니다. 원래도 LLM을 쓰지 않고 retrieve()만 부르는데 100초짜리 LLM 회귀에 얹혀
 # 있어서, 노브를 바꿀 때마다 같이 돌려 볼 수가 없었습니다. 여기서는 5초에 함께 돕니다.
 
-# (질문, 검색에 쓸 질문, 근거에 있어야 할 파일, 있으면 안 되는 파일)
+# (질문, 검색에 쓸 질문, 화면에 표시될 파일, 표시되면 안 되는 파일)
+# 검색 결과가 아니라 display_evidence가 고른 표시용 근거를 봅니다. 검색은 여러 규정을
+# 함께 봐야 하므로 좁히지 않고, 사용자에게 보이는 링크만 하나로 줄입니다.
 EVIDENCE_CASES = [
     (
         "해외출장 전일 이동으로 보면 됩니다",
@@ -184,7 +186,7 @@ def run_evidence_checks():
     print("[근거 구성] 파일 구성 3문항 · 종목어 도달 2문항")
     failed = 0
     for question, resolved, expected, forbidden in EVIDENCE_CASES:
-        files = {item["file"] for item in retrieve(resolved)}
+        files = {item["file"] for item in display_evidence(retrieve(resolved))}
         if files != expected:
             failed += 1
             extra = sorted(files & forbidden)
