@@ -536,6 +536,24 @@ def is_dispatch_calculation_question(question):
     )
 
 
+def company_lodging_status(question):
+    """서울 파견에서 회사 숙소 제공 여부를 부정 표현부터 판별합니다."""
+    not_provided_terms = (
+        "숙소 미제공", "숙소를 제공하지", "숙소 제공하지", "숙소 제공 안",
+        "회사 숙소 없음", "회사 숙소 없",
+    )
+    if any(term in question for term in not_provided_terms):
+        return False
+
+    provided_terms = (
+        "회사 숙소 제공", "회사에서 숙소 제공", "회사가 숙소 제공",
+        "숙소를 제공", "숙소 제공받", "숙소 제공",
+    )
+    if any(term in question for term in provided_terms):
+        return True
+    return None
+
+
 def build_dispatch_calculation_answer(question):
     """확정된 장기 파견 지급률로 파견경비와 숙박비를 계산합니다."""
     if not is_dispatch_calculation_question(question):
@@ -548,15 +566,15 @@ def build_dispatch_calculation_answer(question):
         return "파견기간은 1일 이상으로 알려주세요."
 
     is_seoul = "서울" in question
-    company_lodging = any(term in question for term in ("회사 숙소", "숙소 제공", "숙소를 제공", "숙소 제공받"))
-    if is_seoul and not company_lodging:
+    company_lodging = company_lodging_status(question) if is_seoul else False
+    if is_seoul and company_lodging is None:
         return "서울 파견은 회사가 숙소를 제공하는지에 따라 계산 방식이 달라집니다. 회사가 숙소를 제공하는지 알려주세요."
 
     full_rate_days = min(days, FULL_RATE_DAYS)
     reduced_rate_days = max(days - FULL_RATE_DAYS, 0)
     full_dispatch = DISPATCH_DAILY_ALLOWANCE * full_rate_days
 
-    if is_seoul:
+    if is_seoul and company_lodging:
         reduced_dispatch = DISPATCH_DAILY_ALLOWANCE * 80 // 100 * reduced_rate_days
         dispatch_total = full_dispatch + reduced_dispatch
         lines = [
@@ -590,8 +608,9 @@ def build_dispatch_calculation_answer(question):
     reduced_lodging = LODGING_PER_NIGHT * 60 // 100 * reduced_rate_nights
     dispatch_total = full_dispatch + reduced_dispatch
     lodging_total = full_lodging + reduced_lodging
+    location_label = "서울 파견(회사 숙소 미제공)" if is_seoul else "일반 지역 파견"
     lines = [
-        f"일반 지역 파견 {days}일·숙박 {nights}박 기준 예상 금액입니다.",
+        f"{location_label} {days}일·숙박 {nights}박 기준 예상 금액입니다.",
         "",
         "계산 결과",
         f"- 1~{full_rate_days}일 파견경비: {DISPATCH_DAILY_ALLOWANCE:,}원 × {full_rate_days}일 = {full_dispatch:,}원",

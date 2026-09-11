@@ -468,6 +468,13 @@ def check_dispatch_calculation():
 
     missing_lodging = build_dispatch_calculation_answer("서울에 90일 파견하면 비용이 얼마인가요?")
     assert "회사가 숙소를 제공" in missing_lodging, f"서울 숙소 제공 여부 확인이 필요합니다: {missing_lodging!r}"
+
+    not_provided = generate_answer_node({
+        "question": "서울 파견 150일 회사 숙소 미제공입니다. 파견경비와 숙박비를 계산해 주세요.",
+        "candidate_evidence": [],
+    })["answer"]
+    assert "실제 숙박일수" in not_provided, f"숙소 미제공이면 숙박일수를 물어야 합니다: {not_provided!r}"
+    assert "회사 숙소 제공으로 0원" not in not_provided, f"숙소 미제공을 제공으로 처리했습니다: {not_provided!r}"
     print("통과 [D-03] 장기 파견 계산 및 최종 담당 부서 확인 안내")
 
 
