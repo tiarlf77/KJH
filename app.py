@@ -360,47 +360,6 @@ REFERENCE_TOTAL_LIMIT = 4
 
 
 # 사규 원본이 아닌 보조 문서입니다. 감추지 않고 구분해서 보여줍니다.
-# 사내 추가 기준은 규정집에 없는 사내 운영 기준을, 여비관리 FAQ는 규정집이 다루지 않는
-# 상황의 해설을 담습니다. 실제로 승중상 인정 조건과 백숙부모상 경조휴가는 사내 추가 기준
-# 에만 있고, 개인 사유 귀국 연기는 FAQ에만 있습니다. 사규를 먼저 보여주는 식으로 순서를
-# 정하면 정작 판단의 근거인 이 문서들이 가려집니다. 어느 문서에서 왔는지는 점수가 정하고,
-# 화면에는 사규인지 보조인지만 표시합니다.
-SUPPLEMENT_FILES = {"사내 추가 기준.md", "여비관리 FAQ.md"}
-
-
-def evidence_tier(file_name):
-    """근거 문서의 성격. 화면에서 사규와 보조 기준을 구분해 표시하는 데 씁니다."""
-    return "supplement" if file_name in SUPPLEMENT_FILES else "regulation"
-
-
-def display_evidence(evidence):
-    """화면에 표시할 근거만 고르고 문서 성격을 붙입니다. 생성에 넘기는 근거는 좁히지 않습니다.
-
-    낱말로 검색 자체를 좁히던 focused_evidence_files는 전 지표를 깎아 지웠습니다(44문항
-    MRR 0.760 -> 0.685). 좁혀야 할 곳은 검색이 아니라 표시입니다. 판정과 생성은 여러 규정을
-    함께 보아야 하고, 사용자에게 보이는 링크만 줄이면 둘 다 얻습니다.
-
-    사규와 보조에서 각각 최고 점수 파일을 하나씩 고릅니다. 둘 중 하나만 보이면 답변의
-    근거가 반쪽만 드러납니다. 예를 들어 "해외출장 전일 이동"은 FAQ가 1위지만 여비관리기준도
-    함께 쓰이고, "승중상"은 사내 추가 기준이 1위지만 지급액은 경조금 지급기준에 있습니다.
-    파일 선택은 낱말이 아니라 점수로 하므로 '숙소' 같은 낱말 때문에 엉뚱한 규정에 갇히지
-    않습니다.
-    """
-    ranked = [item for item in evidence if not item.get("referenced")] or evidence
-    if not ranked:
-        return evidence
-    keep = set()
-    for tier in ("regulation", "supplement"):
-        tier_items = [item for item in ranked if evidence_tier(item["file"]) == tier]
-        if tier_items:
-            keep.add(max(tier_items, key=lambda item: item["score"])["file"])
-    return [
-        {**item, "tier": evidence_tier(item["file"])}
-        for item in evidence
-        if item["file"] in keep
-    ]
-
-
 def attach_referenced_chunks(selected, chunks):
     """근거가 가리키는 별첨·조항을 함께 붙입니다.
 
@@ -629,11 +588,10 @@ def call_openai(question, evidence, history=None):
         # 규정.md에 이미 있고, 근거만 줬을 때도 정확히 재현했다.
         " 사용자가 이미 말한 사실(관계, 날짜, 근무지, 이사 여부, 동거 여부, 질문 항목)은 다시 묻지 않는다."
         " 발령·부임·이사·부임비·이전비·가족 잔류·혼자 거주 표현이 있으면 부임 및 숙소지원금 복합 문의로 파악한다."
-        # "이사하지 않으면 부임비를 지급하지 않는다"는 여비관리기준.md 별첨 2 주석에 이미 있고
-        # 근거만 줬을 때도 동일하게 답했다. 결론을 단정하던 부분만 지우고 답변 순서 지침은 남겼다.
-        " 이 경우 부임비 지급 가능 여부를 먼저 답하고, 숙소지원금은 새 근무지·실제 단신 거주·주택 보유 여부·임대차계약서를 기준으로 필요한 만큼만 안내한다."
-        " 가족 명의(본인·배우자·부모·자녀·형제자매) 건물에 전세 또는 월세로 거주하는 경우와 단신부임으로 신청한 뒤 실제 동거인이 있는 경우는 숙소지원금 지원 불가로 안내한다."
-        " 이 경우 전세금·월세 지원금 계산을 하지 말고, '신청 내용이나 실제 거주 형태가 사실과 다르면 윤리위반으로 감사 대상이 될 수 있습니다.'라고 짧게 경고한다."
+        " 이 경우 실제 이사하지 않으면 부임비 지급이 없다는 점을 먼저 답하고, 숙소지원금은 새 근무지·실제 단신 거주·주택 보유 여부·임대차계약서를 기준으로 필요한 만큼만 안내한다."
+        " 가족 명의(본인·배우자·부모·자녀·형제자매) 건물에 전세 또는 월세로 거주하는 경우와 단신부임으로 신청한 뒤 실제 동거인이 있는 사실이 확인된 경우에만 숙소지원금 지원 불가로 안내한다."
+        " 주민등록상 주소 등록과 실제 동거를 동일한 사실로 추정하지 않는다. 주소만 전입했고 실제 동거하지 않는다고 사용자가 밝히면 자동 제외하지 않으며, 실제 동거 여부가 불명확하면 그 사실만 확인한다."
+        " 허위 신청이나 신청 내용과 실제 거주 형태의 불일치가 확인된 경우에만 전세금·월세 지원금 계산을 하지 말고, '신청 내용이나 실제 거주 형태가 사실과 다르면 윤리위반으로 감사 대상이 될 수 있습니다.'라고 짧게 경고한다. 주소만 전입했거나 실제 동거 여부가 불명확한 단계에서는 이 경고를 조건부 설명으로도 언급하지 않는다."
         " 기존 숙소지원금 수급 중 월세와 전세의 계약 형태가 바뀌면 변경된 임대차계약서와 계약조건 확인 자료를 새로 제출하도록 안내한다."
         # 전세 전환 시 지원액(전세금 1,000만원당 월 10만원)은 숙소지원금 운영 기준.md 5.1에
         # 이미 있고, 근거만 줬을 때도 동일하게 답해 지웠다.
@@ -681,6 +639,29 @@ def call_openai(question, evidence, history=None):
 
 POLICY_INTENTS = ("ceremony", "housing", "relocation", "trip", "club", "other")
 
+# 판정기가 근거 번호를 넓게 고르더라도 현재 제도와 직접 관련된 문서만 사용자에게 표시합니다.
+# 부임은 여비와 숙소 기준이 함께 적용될 수 있어 두 문서군을 모두 허용합니다.
+INTENT_EVIDENCE_FILES = {
+    "ceremony": {"경조금 지급기준.md", "사내 추가 기준.md"},
+    "housing": {"숙소지원금 운영 기준.md", "사내 추가 기준.md"},
+    "relocation": {"여비관리기준.md", "숙소지원금 운영 기준.md", "사내 추가 기준.md"},
+    "trip": {"여비관리기준.md", "여비관리 FAQ.md", "사내 추가 기준.md"},
+    "club": {"동호회 관리 규정.md"},
+}
+# 선택된 문서의 직접 어휘 점수가 최고 문서의 80%보다 낮으면 같은 제도 문서라도 표시하지 않습니다.
+USED_EVIDENCE_KEYWORD_RATIO = 0.8
+# 질문에 업무 항목이 명시된 경우에는 점수보다 해당 표현이 실제 근거에 있는지를 우선합니다.
+EVIDENCE_QUERY_ANCHORS = {
+    "주차": ("주차",),
+    "숙소지원금": ("숙소지원금", "숙소 지원"),
+    "부임비": ("부임비",),
+    "이전비": ("이전비", "이전료"),
+    "경조금": ("경조금",),
+    "조의금": ("조의금", "사망"),
+    "동호회": ("동호회",),
+    "동아리": ("동호회", "동아리"),
+}
+
 
 GROUNDEDNESS_INSTRUCTIONS = (
     "너는 사내 복리후생 규정 상담의 근거 판정기다. 사용자 질문과 검색된 규정 근거를 읽고, "
@@ -719,11 +700,14 @@ GROUNDEDNESS_INSTRUCTIONS = (
     "- finding: clarify일 때, 근거만으로 이미 확정할 수 있는 사실을 한두 문장으로 적는다. "
     "기한이 지났다거나 원칙은 무엇이고 어떤 예외가 남았는지처럼 사용자가 바로 알아야 할 내용이다. "
     "확정할 수 있는 것이 없으면 빈 문자열.\n"
+    "- evidence_ids: 판정·finding에 직접 사용한 근거 번호만 정수 배열로 적는다. 질문과 같은 제도라는 "
+    "이유만으로 넣지 말고, 실제 판단 문장을 뒷받침하는 최소한의 근거만 고른다. 직접 근거가 없으면 빈 배열이다.\n"
     "JSON만 출력한다. 형식: "
     '{"verdict": "answerable|clarify|escalate", "reason": "한 문장", '
     '"missing": [{"label": "질문에 빠진 정보", "options": ["짧은 답 후보"]}], '
     '"finding": "이미 확정되는 사실", '
-    '"intent": "ceremony|housing|relocation|trip|club|other", "relation": "관계 또는 null"}'
+    '"intent": "ceremony|housing|relocation|trip|club|other", "relation": "관계 또는 null", '
+    '"evidence_ids": [1, 2]}'
 )
 
 
@@ -731,7 +715,7 @@ def judge_groundedness(question, evidence, history=None):
     """검색 근거만으로 답할 수 있는지 LLM에 판정을 맡깁니다."""
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
     if not api_key or not evidence:
-        return {"verdict": "escalate", "reason": "검색된 근거가 없습니다.", "missing": []}
+        return {"verdict": "escalate", "reason": "검색된 근거가 없습니다.", "missing": [], "evidence_ids": []}
     evidence_text = "\n\n".join(
         f"[근거 {index}] {item['file']} ({item.get('path', '')})\n{item['text'][:1200]}"
         for index, item in enumerate(evidence, 1)
@@ -762,7 +746,7 @@ def judge_groundedness(question, evidence, history=None):
             data = json.loads(response.read().decode("utf-8"))
     except (HTTPError, URLError, TimeoutError, OSError):
         # 판정에 실패하면 단정하지 않고 담당 부서 확인으로 보냅니다.
-        return {"verdict": "escalate", "reason": "근거 판정을 수행하지 못했습니다.", "missing": []}
+        return {"verdict": "escalate", "reason": "근거 판정을 수행하지 못했습니다.", "missing": [], "evidence_ids": []}
     text = data.get("output_text") or ""
     if not text:
         for output in data.get("output", []):
@@ -771,11 +755,11 @@ def judge_groundedness(question, evidence, history=None):
                     text += content.get("text", "")
     match = re.search(r"\{.*\}", text, re.S)
     if not match:
-        return {"verdict": "escalate", "reason": "판정 응답을 해석하지 못했습니다.", "missing": []}
+        return {"verdict": "escalate", "reason": "판정 응답을 해석하지 못했습니다.", "missing": [], "evidence_ids": []}
     try:
         result = json.loads(match.group(0))
     except json.JSONDecodeError:
-        return {"verdict": "escalate", "reason": "판정 응답을 해석하지 못했습니다.", "missing": []}
+        return {"verdict": "escalate", "reason": "판정 응답을 해석하지 못했습니다.", "missing": [], "evidence_ids": []}
     if result.get("verdict") not in ("answerable", "clarify", "escalate"):
         result["verdict"] = "escalate"
     if result.get("intent") not in POLICY_INTENTS:
@@ -796,7 +780,77 @@ def judge_groundedness(question, evidence, history=None):
         if label:
             normalized.append({"label": label, "options": options[:4]})
     result["missing"] = normalized
+    result.setdefault("evidence_ids", [])
     return result
+
+
+def select_used_evidence(question, candidate_evidence, judgement):
+    """검색 후보 중 판정에 직접 사용한 근거만 사용자 표시용으로 남깁니다.
+
+    판정기의 번호는 신뢰하지 않고 현재 후보 범위의 정수만 허용합니다. 번호가 없거나 모두
+    잘못됐으면 검색 1위와 같은 파일의 근거만 남겨, 후보 전체가 화면에 노출되지 않게 합니다.
+    """
+    intent = judgement.get("intent")
+    allowed_files = INTENT_EVIDENCE_FILES.get(intent)
+    eligible = [
+        item for item in candidate_evidence
+        if not allowed_files or item.get("file") in allowed_files
+    ]
+    if not eligible:
+        eligible = list(candidate_evidence)
+
+    # 같은 제도 안에서도 질문의 직접 어휘와 거리가 먼 문서는 표시 근거에서 제외합니다.
+    # 의미 검색 후보는 판정용으로 유지하되, 사용자에게 보이는 출처에는 더 엄격한 기준을 씁니다.
+    best_keyword_by_file = {}
+    for item in eligible:
+        file_name = item.get("file")
+        best_keyword_by_file[file_name] = max(
+            best_keyword_by_file.get(file_name, 0.0),
+            float(item.get("keyword_score", 0.0)),
+        )
+    top_keyword = max(best_keyword_by_file.values(), default=0.0)
+    anchor_terms = {
+        evidence_term
+        for query_term, evidence_terms in EVIDENCE_QUERY_ANCHORS.items()
+        if query_term in question
+        for evidence_term in evidence_terms
+    }
+    anchored_files = {
+        item.get("file")
+        for item in eligible
+        if anchor_terms and any(term in f"{item.get('path', '')} {item.get('text', '')}" for term in anchor_terms)
+    }
+    strong_files = anchored_files or {
+        file_name for file_name, score in best_keyword_by_file.items()
+        if not top_keyword or score >= top_keyword * USED_EVIDENCE_KEYWORD_RATIO
+    }
+
+    selected = []
+    seen = set()
+    raw_ids = judgement.get("evidence_ids", [])
+    if not isinstance(raw_ids, list):
+        raw_ids = []
+    for raw_id in raw_ids:
+        if isinstance(raw_id, bool) or not isinstance(raw_id, int):
+            continue
+        index = raw_id - 1
+        if not 0 <= index < len(candidate_evidence) or index in seen:
+            continue
+        item = candidate_evidence[index]
+        if item not in eligible or item.get("file") not in strong_files:
+            continue
+        selected.append(item)
+        seen.add(index)
+    if selected:
+        # 화면에는 파일명이 표시되므로 선택 단위도 파일로 맞춥니다. 같은 규정 안에서 판정기가
+        # 직접 고르지 않은 표·제출서류 청크도 생성에는 필요할 수 있어 선택된 파일의 후보를
+        # 함께 전달합니다. 다른 파일은 계속 제외됩니다.
+        selected_files = {item.get("file") for item in selected}
+        return [item for item in eligible if item.get("file") in selected_files]
+    if not eligible:
+        return []
+    top_file = max(best_keyword_by_file, key=best_keyword_by_file.get) if top_keyword else eligible[0].get("file")
+    return [item for item in eligible if item.get("file") == top_file]
 
 
 RESOLVE_INSTRUCTIONS = (
@@ -863,7 +917,8 @@ class ConsultationState(TypedDict, total=False):
     resolved: str
     history: list[dict]
     intent: str
-    evidence: list[dict]
+    candidate_evidence: list[dict]
+    used_evidence: list[dict]
     analysis: dict
     answer: str
     ui_actions: list[str]
@@ -877,13 +932,19 @@ def resolve_question_node(state: ConsultationState):
 
 def retrieve_policy_node(state: ConsultationState):
     """현재 제도 질문에 맞는 규정 근거를 검색합니다."""
-    return {"evidence": retrieve(state.get("resolved") or state["question"])}
+    return {"candidate_evidence": retrieve(state.get("resolved") or state["question"])}
 
 
 def analyze_question_node(state: ConsultationState):
     """검색 근거로 답할 수 있는지와 함께 제도 영역·대상 관계를 한 번에 뽑습니다."""
     question = state.get("resolved") or state["question"]
-    return {"analysis": judge_groundedness(question, state.get("evidence", []), state.get("history", []))}
+    return {
+        "analysis": judge_groundedness(
+            question,
+            state.get("candidate_evidence", []),
+            state.get("history", []),
+        )
+    }
 
 
 
@@ -934,12 +995,14 @@ def generate_answer_node(state: ConsultationState):
     # 재작성된 질문이 이전 대화의 사실을 이미 담고 있으므로 이력을 낱말로 끊지 않습니다.
     question = state.get("resolved") or state["question"]
     history = state.get("history", [])
-    evidence = state.get("evidence", [])
+    candidate_evidence = state.get("candidate_evidence", [])
     missing = []
-    if not evidence:
+    if not candidate_evidence:
         answer = build_unknown_policy_answer(question)
+        used_evidence = []
     else:
-        judgement = state.get("analysis") or judge_groundedness(question, evidence, history)
+        judgement = state.get("analysis") or judge_groundedness(question, candidate_evidence, history)
+        used_evidence = select_used_evidence(question, candidate_evidence, judgement)
         verdict = judgement["verdict"]
         if verdict == "clarify":
             missing = judgement.get("missing", [])
@@ -949,10 +1012,10 @@ def generate_answer_node(state: ConsultationState):
             if judgement.get("intent") == "other":
                 answer = build_clarification_answer(question)
             else:
-                answer = build_escalation_answer(judgement.get("reason", ""), evidence)
+                answer = build_escalation_answer(judgement.get("reason", ""), used_evidence)
         else:
-            answer = call_openai(question, evidence, history)
-    result = {"answer": answer}
+            answer = call_openai(question, used_evidence, history)
+    result = {"answer": answer, "used_evidence": used_evidence}
     # 동호회 신규 신청 문의에는 답변 경로와 무관하게 메일 초안 버튼을 띄웁니다.
     if is_club_application_question(question):
         result["ui_actions"] = ["club_application_draft"]
@@ -988,10 +1051,16 @@ INQUIRY_HISTORY = []
 
 def build_inquiry_draft(question, answer, evidence):
     """상담 결과를 담당자 문의 메일 초안으로 변환합니다."""
-    evidence_lines = "\n".join(
-        f"- {item.get('file', '관련 규정')}"
-        for item in evidence
-    ) or "- 확인된 규정 근거 없음"
+    # 검색 근거는 같은 규정의 여러 조항 청크를 포함할 수 있으므로, 메일에는 규정 파일별로 한 번만 적습니다.
+    evidence_files = []
+    seen_files = set()
+    for item in evidence:
+        file_name = str(item.get("file", "")).strip()
+        if not file_name or file_name in seen_files:
+            continue
+        seen_files.add(file_name)
+        evidence_files.append(Path(file_name).stem)
+    evidence_lines = "\n".join(f"- {file_name}" for file_name in evidence_files) or "- 확인된 규정 근거 없음"
     body = (
         "안녕하세요.\n"
         "복리후생 지원 가능 여부를 확인 부탁드립니다.\n\n"
@@ -1101,7 +1170,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.respond(200, {
                 "answer": result["answer"],
                 "missing": result.get("missing", []),
-                "evidence": display_evidence(result.get("evidence", [])),
+                "evidence": result.get("used_evidence", []),
                 "ui_actions": result.get("ui_actions", []),
             })
         except (ValueError, RuntimeError, HTTPError, URLError) as error:
