@@ -6,6 +6,7 @@ from app import (
     load_env,
     resolve_question,
     retrieve_policy_node,
+    select_used_evidence,
 )
 
 # 키를 읽지 않으면 LLM 경로 사례가 전부 담당 부서 이관으로 떨어져 검증이 되지 않습니다.
@@ -278,6 +279,21 @@ CLUB_SCOPE_CASES = [
 ]
 
 
+# 사용자 화면의 "확인한 규정"은 검색 후보 전체가 아니라 답변에 실제 사용한 근거만 보여야 합니다.
+DISPLAY_EVIDENCE_CASES = [
+    (
+        "출장지에서 유료 주차장을 이용했는데 지원됩니까?",
+        {"여비관리기준.md"},
+        {"숙소지원금 운영 기준.md", "동호회 관리 규정.md", "사내 추가 기준.md"},
+    ),
+    (
+        "광양에서 포항으로 부임하면서 실제 이사합니다. 부임비와 기존 숙소 정리 기간의 숙소지원금은 각각 어떻게 지원되나요?",
+        {"여비관리기준.md", "숙소지원금 운영 기준.md"},
+        {"경조금 지급기준.md", "동호회 관리 규정.md", "여비관리 FAQ.md"},
+    ),
+]
+
+
 def check_continuity(question, history, required_texts, forbidden_texts):
     """후속 입력이 자립형 질문으로 다시 쓰이는지 확인합니다."""
     resolved = resolve_question(question, history)
@@ -296,7 +312,7 @@ def check_evidence(question, resolved, intent, expected_files, forbidden_files):
     없어졌습니다. 검증하려던 것(무관한 파일이 근거에 남지 않는다)은 검색 결과로 그대로 봅니다.
     intent는 규칙을 켜는 데만 쓰였으므로 더 이상 필요하지 않습니다.
     """
-    evidence = retrieve_policy_node({"question": question, "resolved": resolved})["evidence"]
+    evidence = retrieve_policy_node({"question": question, "resolved": resolved})["candidate_evidence"]
     files = {item["file"] for item in evidence}
     assert files == expected_files, f"근거 파일이 다릅니다: {sorted(files)!r}"
     assert not files & forbidden_files, f"무관한 근거 파일이 포함됐습니다: {sorted(files & forbidden_files)!r}"
@@ -305,12 +321,20 @@ def check_evidence(question, resolved, intent, expected_files, forbidden_files):
 def check_club_scope(question, required_term):
     """동호회·동아리 질문이 분야별 운영 기준이 담긴 근거를 찾는지 확인합니다."""
     result = retrieve_policy_node({"question": question, "resolved": question})
-    evidence = result["evidence"]
+    evidence = result["candidate_evidence"]
     files = {item["file"] for item in evidence}
     assert files == {"동호회 관리 규정.md"}, f"근거 파일이 다릅니다: {sorted(files)!r}"
     assert any(required_term in item["text"] for item in evidence), (
         f"분야별 운영 기준에 {required_term!r}가 포함되지 않았습니다."
     )
+
+
+def check_display_evidence(question, expected_files, forbidden_files):
+    """전체 상담 뒤 사용자 화면으로 반환되는 근거 파일만 확인합니다."""
+    result = CONSULTATION_GRAPH.invoke({"question": question, "history": []})
+    files = {item["file"] for item in result.get("used_evidence", [])}
+    assert files == expected_files, f"표시 근거 파일이 다릅니다: {sorted(files)!r}"
+    assert not files & forbidden_files, f"무관한 표시 근거가 포함됐습니다: {sorted(files & forbidden_files)!r}"
 
 
 def check_case(question, required_text, forbidden_text, history=()):
@@ -382,15 +406,40 @@ def check_reference_expansion():
     print("통과 [D-01] 참조 확장(별첨 지목·나열 제외·중복 방지)")
 
 
+def check_used_evidence_selection():
+    """판정기 번호 검증과 최고 관련 파일 fallback을 API 없이 확인합니다."""
+    candidates = [
+        {"file": "여비관리기준.md", "path": "5.14.6", "score": 0.9, "keyword_score": 10.0, "text": "회사 차량 주차비"},
+        {"file": "여비관리기준.md", "path": "5.14.5", "score": 0.8, "keyword_score": 9.0, "text": "렌터카 주차료"},
+        {"file": "숙소지원금 운영 기준.md", "path": "5.4", "score": 0.7, "keyword_score": 9.5, "text": "지원 기준"},
+        {"file": "여비관리 FAQ.md", "path": "해외출장", "score": 0.6, "keyword_score": 7.0, "text": "개인 일정 체류"},
+    ]
+    selected = select_used_evidence(
+        "출장지에서 유료 주차장을 이용했는데 지원됩니까?",
+        candidates,
+        {"intent": "trip", "evidence_ids": [2, 2, 3, 4, 99, "1", True]},
+    )
+    assert selected == candidates[:2], f"선택된 규정 파일의 후보 청크만 남아야 합니다: {selected!r}"
+    fallback = select_used_evidence(
+        "출장비 지급 여부",
+        candidates,
+        {"intent": "trip", "evidence_ids": "1,2"},
+    )
+    assert fallback == candidates[:2], f"번호가 잘못되면 최고 관련 파일만 남아야 합니다: {fallback!r}"
+    print("통과 [F-00] 실제 사용 근거 번호 검증·fallback")
+
+
 def main():
     """보호 동작과 알려진 오답을 실행하고 전체 결과를 요약합니다."""
     check_reference_expansion()
+    check_used_evidence_selection()
     protected = run_cases("A", PROTECTED_CASES)
     unresolved = run_cases("B", KNOWN_FAILURE_CASES)
     continuity = run_cases("C", CONTINUITY_CASES, check_continuity)
     evidence = run_cases("D", EVIDENCE_CASES, check_evidence)
     club_scope = run_cases("E", CLUB_SCOPE_CASES, check_club_scope)
-    total = tuple(sum(values) for values in zip(protected, unresolved, continuity, evidence, club_scope))
+    display_evidence = run_cases("F", DISPLAY_EVIDENCE_CASES, check_display_evidence)
+    total = tuple(sum(values) for values in zip(protected, unresolved, continuity, evidence, club_scope, display_evidence))
 
     print()
     print(f"(A) 지켜야 할 동작: 통과 {protected[0]} / 실패 {protected[1]} / 건너뜀 {protected[2]}")
@@ -398,6 +447,7 @@ def main():
     print(f"(C) 대화 연속성: 통과 {continuity[0]} / 실패 {continuity[1]} / 건너뜀 {continuity[2]}")
     print(f"(D) 근거 링크 적합성: 통과 {evidence[0]} / 실패 {evidence[1]} / 건너뜀 {evidence[2]}")
     print(f"(E) 동호회 분야 기준 검색: 통과 {club_scope[0]} / 실패 {club_scope[1]} / 건너뜀 {club_scope[2]}")
+    print(f"(F) 화면 표시 근거: 통과 {display_evidence[0]} / 실패 {display_evidence[1]} / 건너뜀 {display_evidence[2]}")
     print(f"전체: 통과 {total[0]} / 실패 {total[1]} / 건너뜀 {total[2]}")
     raise SystemExit(1 if total[1] else 0)
 

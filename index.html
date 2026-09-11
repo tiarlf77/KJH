@@ -110,16 +110,16 @@
     function addTyping(){chat.insertAdjacentHTML('beforeend',`<div id="typing" class="message assistant"><div class="avatar">AI</div><div class="bubble">답변을 준비하고 있습니다...</div></div>`)}
     function removeTyping(){const typing=document.querySelector('#typing');if(typing)typing.remove()}
     function addError(text){chat.insertAdjacentHTML('beforeend',`<div class="message assistant"><div class="avatar">AI</div><div class="bubble"><div class="notice">⚠ ${escapeHtml(text)}</div></div></div>`)}
-    function addAnswer(answer,evidence,uiActions){
+    function addAnswer(answer,usedEvidence,uiActions){
       const cleanAnswer=answer.replace(/(?:\*\*)?확인한 규정(?:\*\*)?[:：][\s\S]*$/i,'').trim();
-      const sources=[...new Set((evidence||[]).map(x=>x.file))];const sourceLinks=sources.length?`<div class="sources"><span>확인한 규정</span>${sources.map(file=>`<a href="/rules/${encodeURIComponent(file)}" target="_blank" rel="noopener">${escapeHtml(file.replace(/\.(txt|md)$/,''))}</a>`).join('')}</div>`:'';
+      const sources=[...new Set((usedEvidence||[]).map(x=>x.file))];const sourceLinks=sources.length?`<div class="sources"><span>확인한 규정</span>${sources.map(file=>`<a href="/rules/${encodeURIComponent(file)}" target="_blank" rel="noopener">${escapeHtml(file.replace(/\.(txt|md)$/,''))}</a>`).join('')}</div>`:'';
       const currentQuestion=conversation.at(-1)?.content||'';
-      const inquiryData=encodeURIComponent(JSON.stringify({question:currentQuestion,answer:cleanAnswer,evidence:evidence||[]}));
+      const inquiryData=encodeURIComponent(JSON.stringify({question:currentQuestion,answer:cleanAnswer,evidence:usedEvidence||[]}));
       const travelQuestion=/(출장|여비|기차|철도|열차|교통비|환율|외환|숙박비|부임비|이전비|교육|연수)/.test(currentQuestion);
       const quickLinks=travelQuestion?`<div class="quick-links"><div class="quick-links-title">출장 관련 바로가기</div><div class="quick-links-list"><a class="quick-link" href="https://map.naver.com/" target="_blank" rel="noopener noreferrer">⌖ 네이버지도 ↗</a><a class="quick-link" href="http://www.smbs.biz/ExRate/TodayExRate.jsp" target="_blank" rel="noopener noreferrer">▥ 서울외환중개 ↗</a><a class="quick-link" href="https://www.korail.com/ticket/search/general" target="_blank" rel="noopener noreferrer">▣ 코레일 ↗</a><a class="quick-link" href="https://www.yeogi.com/" target="_blank" rel="noopener noreferrer">▢ 여기어때 ↗</a></div></div>`:'';
       const clubApplicationButton=(uiActions||[]).includes('club_application_draft')?`<button class="inquiry-button club-application-button">동호회 신청 메일 작성</button>`:'';
       chat.insertAdjacentHTML('beforeend',`<div class="message assistant"><div class="avatar">AI</div><div class="bubble">${renderAnswer(cleanAnswer)}${sourceLinks}${quickLinks}<br>${clubApplicationButton}<button class="inquiry-button" data-inquiry="${inquiryData}">담당자에게 문의하기</button></div></div>`);window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
-      updateEvidencePanel(evidence||[]);
+      updateEvidencePanel(usedEvidence||[]);
       return;
       /* 기존 브라우저 내장 답변 로직은 백엔드 LLM 답변으로 대체되었습니다. */
       /*
