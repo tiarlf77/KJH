@@ -14,6 +14,7 @@ from app import (
     generate_answer_node,
     load_env,
     resolve_question,
+    resolve_question,
     retrieve_policy_node,
     select_used_evidence,
 )
@@ -475,6 +476,18 @@ def check_dispatch_calculation():
     })["answer"]
     assert "실제 숙박일수" in not_provided, f"숙소 미제공이면 숙박일수를 물어야 합니다: {not_provided!r}"
     assert "회사 숙소 제공으로 0원" not in not_provided, f"숙소 미제공을 제공으로 처리했습니다: {not_provided!r}"
+
+    lodging_history = [
+        {"role": "user", "content": "서울 파견 60일의 파견경비와 숙박비를 계산해 주세요."},
+        {"role": "assistant", "content": "서울 파견은 회사가 숙소를 제공하는지에 따라 계산 방식이 달라집니다."},
+    ]
+    resolved = resolve_question("숙소 제공 안해줘", lodging_history)
+    assert "서울" in resolved and "60일" in resolved, (
+        f"부정 답변이 파견 조건과 결합되지 않았습니다: {resolved!r}"
+    )
+    follow_up = generate_answer_node({"question": "숙소 제공 안해줘", "resolved": resolved, "candidate_evidence": []})["answer"]
+    assert "실제 숙박일수" in follow_up, f"후속 부정 답변은 숙박일수를 물어야 합니다: {follow_up!r}"
+    assert "회사 숙소 제공으로 0원" not in follow_up, f"후속 부정 답변을 제공으로 처리했습니다: {follow_up!r}"
     print("통과 [D-03] 장기 파견 계산 및 최종 담당 부서 확인 안내")
 
 

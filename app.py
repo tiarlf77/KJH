@@ -538,19 +538,34 @@ def is_dispatch_calculation_question(question):
 
 def company_lodging_status(question):
     """서울 파견에서 회사 숙소 제공 여부를 부정 표현부터 판별합니다."""
+    normalized = re.sub(r"\s+", "", question)
     not_provided_terms = (
-        "숙소 미제공", "숙소를 제공하지", "숙소 제공하지", "숙소 제공 안",
-        "회사 숙소 없음", "회사 숙소 없",
+        "숙소미제공", "숙소제공안", "숙소제공않", "숙소제공하지",
+        "숙소를제공하지", "숙소제공받지", "숙소를제공받지",
+        "회사숙소없음", "회사숙소없",
     )
-    if any(term in question for term in not_provided_terms):
+    if any(term in normalized for term in not_provided_terms):
         return False
 
     provided_terms = (
-        "회사 숙소 제공", "회사에서 숙소 제공", "회사가 숙소 제공",
-        "숙소를 제공", "숙소 제공받", "숙소 제공",
+        "회사숙소제공", "회사에서숙소제공", "회사가숙소제공",
+        "숙소를제공", "숙소제공받", "숙소제공",
     )
-    if any(term in question for term in provided_terms):
+    if any(term in normalized for term in provided_terms):
         return True
+    return None
+
+
+def resolve_lodging_status_reply(question, history):
+    """서울 파견 숙소 제공 여부의 후속 답변은 AI 재해석 없이 이전 조건과 결합합니다."""
+    if company_lodging_status(question) is not False:
+        return None
+    for item in reversed(history or []):
+        prior_question = str(item.get("content", "")).strip()
+        if item.get("role") != "user":
+            continue
+        if "서울" in prior_question and "파견" in prior_question and extract_dispatch_days(prior_question):
+            return f"{prior_question} {question}"
     return None
 
 
@@ -1006,6 +1021,10 @@ def resolve_question(question, history):
     '출장'이 걸려 이력이 끊겼고, "부모님 상당했는데"는 아무것도 안 걸려 지난 주제가 남았습니다.
     후속인지 아닌지를 코드가 정하지 않고, 다시 쓴 질문 하나를 검색·판정·생성이 함께 씁니다.
     """
+    lodging_status_question = resolve_lodging_status_reply(question, history)
+    if lodging_status_question:
+        return lodging_status_question
+
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
     if not history or not api_key:
         return question
