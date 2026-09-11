@@ -35,6 +35,7 @@ FINAL_REVIEW_NOTICE = "안내 내용은 사전 참고용이며, 최종 지급·�
 DISPATCH_DAILY_ALLOWANCE = 33_000
 LODGING_PER_NIGHT = 50_000
 FULL_RATE_DAYS = 14
+MONTHLY_CALCULATION_DAYS = 30
 
 
 
@@ -528,6 +529,41 @@ def extract_lodging_nights(question):
     return int(match.group(1)) if match else None
 
 
+def extract_dispatch_route(question):
+    """'출발지에서 목적지로 파견' 문장에서 출발지와 목적지를 분리합니다."""
+    match = re.search(
+        r"([가-힣]{1,20})에서\s*([가-힣]{1,20}?)(?:으로|로)\s*파견",
+        question,
+    )
+    if not match:
+        return None
+    return match.group(1), match.group(2)
+
+
+def extract_dispatch_destination(question):
+    """명시된 파견 목적지를 읽고, 경로가 없을 때만 기존 '서울 파견' 표현을 사용합니다."""
+    canonical = re.search(r"파견\s*목적지\s*:\s*([가-힣]+)", question)
+    if canonical:
+        return canonical.group(1)
+    route = extract_dispatch_route(question)
+    if route:
+        return route[1]
+    if "서울" in question and "파견" in question:
+        return "서울"
+    return None
+
+
+def is_seoul_dispatch(question):
+    """출발지가 아니라 파견 목적지가 서울인 경우에만 서울 특례로 판정합니다."""
+    return extract_dispatch_destination(question) == "서울"
+
+
+def is_monthly_breakdown_question(question):
+    """총액을 30일 단위 구간으로 나눠 달라는 요청인지 확인합니다."""
+    normalized = re.sub(r"\s+", "", question)
+    return any(term in normalized for term in ("월단위", "월별", "개월차"))
+
+
 def is_dispatch_calculation_question(question):
     """파견 기간별 금액을 묻는 경우에만 결정론적 계산 경로를 사용합니다."""
     calculation_words = ("계산", "얼마", "금액", "지급", "파견경비", "숙박비", "숙박료", "파견비")
@@ -539,34 +575,124 @@ def is_dispatch_calculation_question(question):
 def company_lodging_status(question):
     """서울 파견에서 회사 숙소 제공 여부를 부정 표현부터 판별합니다."""
     normalized = re.sub(r"\s+", "", question)
-    not_provided_terms = (
-        "숙소미제공", "숙소제공안", "숙소제공않", "숙소제공하지",
-        "숙소를제공하지", "숙소제공받지", "숙소를제공받지",
-        "회사숙소없음", "회사숙소없",
+    negative_patterns = (
+        r"숙소(?:는|은|가|를|도)?제공(?:받)?(?:하지|되지|안|않|못|지)",
+        r"숙소(?:는|은|가|를|도)?미제공",
+        r"회사숙소(?:는|은|가)?없",
     )
-    if any(term in normalized for term in not_provided_terms):
+    if any(re.search(pattern, normalized) for pattern in negative_patterns):
         return False
 
-    provided_terms = (
-        "회사숙소제공", "회사에서숙소제공", "회사가숙소제공",
-        "숙소를제공", "숙소제공받", "숙소제공",
-    )
-    if any(term in normalized for term in provided_terms):
+    if re.search(r"숙소(?:는|은|가|를|도)?제공(?:받)?", normalized):
         return True
     return None
 
 
-def resolve_lodging_status_reply(question, history):
-    """서울 파견 숙소 제공 여부의 후속 답변은 AI 재해석 없이 이전 조건과 결합합니다."""
-    if company_lodging_status(question) is not False:
+def resolve_dispatch_followup(question, history):
+    """파견 후속 입력을 이전에 확정된 조건과 결합한 질문으로 정규화합니다."""
+    prior_items = [
+        item for item in (history or [])[-8:]
+        if item.get("role") in ("user", "assistant") and item.get("content")
+    ]
+    if not prior_items or not any("파견" in str(item["content"]) for item in prior_items):
         return None
-    for item in reversed(history or []):
-        prior_question = str(item.get("content", "")).strip()
-        if item.get("role") != "user":
-            continue
-        if "서울" in prior_question and "파견" in prior_question and extract_dispatch_days(prior_question):
-            return f"{prior_question} {question}"
-    return None
+
+    followup_signal = (
+        is_monthly_breakdown_question(question)
+        or company_lodging_status(question) is not None
+        or extract_dispatch_days(question) is not None
+        or extract_lodging_nights(question) is not None
+    )
+    if not followup_signal:
+        return None
+
+    user_texts = [str(item["content"]) for item in prior_items if item.get("role") == "user"]
+    route = None
+    destination = None
+    for text in reversed(user_texts):
+        route = extract_dispatch_route(text)
+        if route:
+            destination = route[1]
+            break
+        explicit_destination = re.search(r"파견\s*목적지\s*:\s*([가-힣]+)", text)
+        if explicit_destination:
+            destination = explicit_destination.group(1)
+            break
+    if destination is None:
+        for text in reversed(user_texts):
+            if "서울" in text and "파견" in text:
+                destination = "서울"
+                break
+
+    def latest_value(extractor):
+        current_value = extractor(question)
+        if current_value is not None:
+            return current_value
+        for text in reversed(user_texts):
+            value = extractor(text)
+            if value is not None:
+                return value
+        return None
+
+    lodging_status = company_lodging_status(question)
+    if lodging_status is None:
+        for text in reversed(user_texts):
+            lodging_status = company_lodging_status(text)
+            if lodging_status is not None:
+                break
+
+    parts = ["파견 비용 계산"]
+    if route:
+        parts.append(f"파견 출발지: {route[0]}")
+    if destination:
+        parts.append(f"파견 목적지: {destination}")
+    days = latest_value(extract_dispatch_days)
+    nights = latest_value(extract_lodging_nights)
+    if days is not None:
+        parts.append(f"파견기간 {days}일")
+    if nights is not None:
+        parts.append(f"숙박 {nights}박")
+    if lodging_status is True:
+        parts.append("회사 숙소 제공")
+    elif lodging_status is False:
+        parts.append("회사 숙소 미제공")
+    if is_monthly_breakdown_question(question):
+        parts.append("월 단위 계산")
+    return ". ".join(parts)
+
+
+def tiered_amount(start, end, unit_amount, reduced_percent):
+    """누적 1~14회는 정액, 그 이후는 감액률을 적용해 지정 구간 금액을 계산합니다."""
+    if end < start:
+        return 0
+    full_count = max(min(end, FULL_RATE_DAYS) - start + 1, 0) if start <= FULL_RATE_DAYS else 0
+    total_count = end - start + 1
+    reduced_count = total_count - full_count
+    return unit_amount * full_count + unit_amount * reduced_percent // 100 * reduced_count
+
+
+def build_monthly_dispatch_lines(days, nights, company_lodging, reduced_dispatch_percent):
+    """파견일과 숙박일을 각각 30일 단위로 나눠 월별 합계를 만듭니다."""
+    unit_count = days if company_lodging else max(days, nights)
+    month_count = math.ceil(unit_count / MONTHLY_CALCULATION_DAYS)
+    lines = ["", "월별 계산(1개월=30일)"]
+    for month_index in range(month_count):
+        start = month_index * MONTHLY_CALCULATION_DAYS + 1
+        day_end = min((month_index + 1) * MONTHLY_CALCULATION_DAYS, days)
+        night_end = min((month_index + 1) * MONTHLY_CALCULATION_DAYS, nights)
+        dispatch_amount = tiered_amount(start, day_end, DISPATCH_DAILY_ALLOWANCE, reduced_dispatch_percent)
+        lodging_amount = 0 if company_lodging else tiered_amount(start, night_end, LODGING_PER_NIGHT, 60)
+        ranges = []
+        if start <= day_end:
+            ranges.append(f"{start}~{day_end}일")
+        if not company_lodging and start <= night_end:
+            ranges.append(f"{start}~{night_end}박")
+        lines.append(
+            f"- {month_index + 1}개월 차({'·'.join(ranges)}): "
+            f"파견경비 {dispatch_amount:,}원 + 숙박비 {lodging_amount:,}원 = "
+            f"{dispatch_amount + lodging_amount:,}원"
+        )
+    return lines
 
 
 def build_dispatch_calculation_answer(question):
@@ -580,7 +706,7 @@ def build_dispatch_calculation_answer(question):
     if days < 1:
         return "파견기간은 1일 이상으로 알려주세요."
 
-    is_seoul = "서울" in question
+    is_seoul = is_seoul_dispatch(question)
     company_lodging = company_lodging_status(question) if is_seoul else False
     if is_seoul and company_lodging is None:
         return "서울 파견은 회사가 숙소를 제공하는지에 따라 계산 방식이 달라집니다. 회사가 숙소를 제공하는지 알려주세요."
@@ -605,9 +731,10 @@ def build_dispatch_calculation_answer(question):
         lines.extend((
             "- 숙박비: 회사 숙소 제공으로 0원",
             f"- 총 예상 지급액: {dispatch_total:,}원",
-            "",
-            "교통비와 파견지에서 발생한 별도 출장비는 포함하지 않은 금액입니다.",
         ))
+        if is_monthly_breakdown_question(question):
+            lines.extend(build_monthly_dispatch_lines(days, 0, True, 80))
+        lines.extend(("", "교통비와 파견지에서 발생한 별도 출장비는 포함하지 않은 금액입니다."))
         return "\n".join(lines)
 
     nights = extract_lodging_nights(question)
@@ -643,9 +770,10 @@ def build_dispatch_calculation_answer(question):
         f"- 파견경비 합계: {dispatch_total:,}원",
         f"- 숙박비 합계: {lodging_total:,}원",
         f"- 총 예상 지급액: {dispatch_total + lodging_total:,}원",
-        "",
-        "교통비와 파견지에서 발생한 별도 출장비는 포함하지 않은 금액입니다.",
     ))
+    if is_monthly_breakdown_question(question):
+        lines.extend(build_monthly_dispatch_lines(days, nights, False, 60))
+    lines.extend(("", "교통비와 파견지에서 발생한 별도 출장비는 포함하지 않은 금액입니다."))
     return "\n".join(lines)
 
 
@@ -1021,9 +1149,9 @@ def resolve_question(question, history):
     '출장'이 걸려 이력이 끊겼고, "부모님 상당했는데"는 아무것도 안 걸려 지난 주제가 남았습니다.
     후속인지 아닌지를 코드가 정하지 않고, 다시 쓴 질문 하나를 검색·판정·생성이 함께 씁니다.
     """
-    lodging_status_question = resolve_lodging_status_reply(question, history)
-    if lodging_status_question:
-        return lodging_status_question
+    dispatch_followup = resolve_dispatch_followup(question, history)
+    if dispatch_followup:
+        return dispatch_followup
 
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
     if not history or not api_key:

@@ -14,7 +14,6 @@ from app import (
     generate_answer_node,
     load_env,
     resolve_question,
-    resolve_question,
     retrieve_policy_node,
     select_used_evidence,
 )
@@ -488,6 +487,66 @@ def check_dispatch_calculation():
     follow_up = generate_answer_node({"question": "숙소 제공 안해줘", "resolved": resolved, "candidate_evidence": []})["answer"]
     assert "실제 숙박일수" in follow_up, f"후속 부정 답변은 숙박일수를 물어야 합니다: {follow_up!r}"
     assert "회사 숙소 제공으로 0원" not in follow_up, f"후속 부정 답변을 제공으로 처리했습니다: {follow_up!r}"
+    suggested_nights_history = [
+        {"role": "user", "content": "서울에서 포항으로 3개월 파견가는데 파견비가 얼마나 나오나요?"},
+        {
+            "role": "assistant",
+            "content": "파견기간은 90일로 확인됩니다. 실제 숙박일수를 '90박'처럼 알려주세요.",
+        },
+    ]
+    suggested_nights = resolve_question("숙소 제공 안해줘", suggested_nights_history)
+    suggested_nights_answer = generate_answer_node({
+        "question": "숙소 제공 안해줘",
+        "resolved": suggested_nights,
+        "candidate_evidence": [],
+    })["answer"]
+    assert "실제 숙박일수" in suggested_nights_answer, (
+        f"안내 문구의 숙박일수 예시를 사용자 입력으로 오인했습니다: {suggested_nights_answer!r}"
+    )
+
+    # 출발지가 아니라 목적지가 서울일 때만 서울 파견 특례를 적용해야 합니다.
+    pohang = build_dispatch_calculation_answer(
+        "서울에서 포항으로 파견 89일, 숙박 90박이며 회사 숙소는 제공하지 않고 월 단위로 알려주세요."
+    )
+    assert pohang.startswith("일반 지역 파견"), f"출발지 서울을 서울 파견으로 오인했습니다: {pohang!r}"
+    seoul_destination = build_dispatch_calculation_answer(
+        "포항에서 서울로 파견 90일이며 회사 숙소를 제공받습니다. 비용이 얼마인가요?"
+    )
+    assert seoul_destination.startswith("서울 파견(회사 숙소 제공)"), (
+        f"목적지 서울에 서울 파견 특례가 적용되지 않았습니다: {seoul_destination!r}"
+    )
+    for expression in ("회사 숙소는 제공하지 않고", "회사 숙소를 제공받지 않습니다"):
+        seoul_without_lodging = build_dispatch_calculation_answer(
+            f"포항에서 서울로 파견 89일, 숙박 90박이며 {expression} 비용을 계산해 주세요."
+        )
+        assert seoul_without_lodging.startswith("서울 파견(회사 숙소 미제공)"), (
+            f"숙소 미제공 표현을 인식하지 못했습니다: {expression!r} / {seoul_without_lodging!r}"
+        )
+
+    # 화면에서 발생한 전체 대화를 그대로 전달해도 이미 확정된 조건을 다시 묻지 않고
+    # 30일 단위로 나눈 결과를 반환해야 합니다.
+    monthly_history = [
+        {"role": "user", "content": "서울에서 포항으로 파견가는데 3개월정도가. 파견비 얼마나 나와?"},
+        {"role": "assistant", "content": "서울 파견은 회사가 숙소를 제공하는지 알려주세요."},
+        {"role": "user", "content": "숙소 제공 안해줘"},
+        {"role": "assistant", "content": "파견기간은 90일로 확인됩니다. 실제 숙박일수를 알려주세요."},
+        {"role": "user", "content": "89일 90박"},
+        {
+            "role": "assistant",
+            "content": (
+                "서울 파견(회사 숙소 미제공) 89일·숙박 90박 기준 예상 금액입니다. "
+                "파견경비 합계: 1,947,000원. 숙박비 합계: 2,980,000원. "
+                "총 예상 지급액: 4,927,000원."
+            ),
+        },
+    ]
+    monthly = CONSULTATION_GRAPH.invoke({
+        "question": "월 단위로 알려줘",
+        "history": monthly_history,
+    })["answer"]
+    for required in ("일반 지역 파견", "1개월 차", "1,958,800원", "2개월 차", "1,494,000원", "3개월 차", "1,474,200원", "4,927,000원"):
+        assert required in monthly, f"월별 파견 계산에 필요한 내용이 없습니다: {required!r} / {monthly!r}"
+    assert "회사가 숙소를 제공하는지" not in monthly, f"확정된 숙소 조건을 다시 물었습니다: {monthly!r}"
     print("통과 [D-03] 장기 파견 계산 및 최종 담당 부서 확인 안내")
 
 
