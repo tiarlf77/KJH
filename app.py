@@ -1042,10 +1042,16 @@ INQUIRY_HISTORY = []
 
 def build_inquiry_draft(question, answer, evidence):
     """상담 결과를 담당자 문의 메일 초안으로 변환합니다."""
-    evidence_lines = "\n".join(
-        f"- {item.get('file', '관련 규정')}"
-        for item in evidence
-    ) or "- 확인된 규정 근거 없음"
+    # 검색 근거는 같은 규정의 여러 조항 청크를 포함할 수 있으므로, 메일에는 규정 파일별로 한 번만 적습니다.
+    evidence_files = []
+    seen_files = set()
+    for item in evidence:
+        file_name = str(item.get("file", "")).strip()
+        if not file_name or file_name in seen_files:
+            continue
+        seen_files.add(file_name)
+        evidence_files.append(Path(file_name).stem)
+    evidence_lines = "\n".join(f"- {file_name}" for file_name in evidence_files) or "- 확인된 규정 근거 없음"
     body = (
         "안녕하세요.\n"
         "복리후생 지원 가능 여부를 확인 부탁드립니다.\n\n"
