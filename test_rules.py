@@ -10,6 +10,7 @@
 from app import (
     CONSULTATION_GRAPH,
     attach_referenced_chunks,
+    build_dispatch_calculation_answer,
     generate_answer_node,
     load_env,
     resolve_question,
@@ -431,6 +432,9 @@ def check_missing_chips():
     }
     result = generate_answer_node(state)
     assert result.get("missing") == items[:4], f"칩은 4개까지만 실어야 합니다: {result.get('missing')}"
+    assert result["answer"].endswith("최종 지급·승인 여부는 담당 부서의 확인 후 결정됩니다."), (
+        f"최종 담당 부서 확인 안내가 없습니다: {result['answer']!r}"
+    )
 
     # escalate는 되물을 항목이 없으므로 missing 키 자체가 없어야 합니다(빈 리스트로 칩이
     # 빈 채 뜨는 것과 구분). call_openai를 부르지 않는 verdict라 API 키 없이도 확인됩니다.
@@ -438,6 +442,33 @@ def check_missing_chips():
     result = generate_answer_node(escalate_state)
     assert "missing" not in result, f"escalate에는 missing이 없어야 합니다: {result}"
     print("통과 [D-02] missing 칩 개수 제한 및 escalate 시 미포함")
+
+
+def check_dispatch_calculation():
+    """사용자가 확정한 장기 파견 계산식과 담당 부서 확인 안내를 API 없이 검증합니다."""
+    normal = generate_answer_node({
+        "question": "일반 지역에 90일 파견하고 90박 숙박하면 파견경비와 숙박비가 얼마인가요?",
+        "candidate_evidence": [],
+    })["answer"]
+    for required in ("1,966,800원", "2,980,000원", "4,946,800원", "최종 지급·승인 여부는 담당 부서의 확인 후 결정됩니다."):
+        assert required in normal, f"일반 지역 90일 계산 결과가 다릅니다: {required!r} / {normal!r}"
+
+    three_months = build_dispatch_calculation_answer("일반 지역에 3개월 파견하고 90박 숙박하면 비용이 얼마인가요?")
+    assert "4,946,800원" in three_months, f"3개월은 90일로 계산해야 합니다: {three_months!r}"
+
+    seoul = generate_answer_node({
+        "question": "서울에 회사 숙소 제공으로 90일 파견하면 파견경비와 숙박비가 얼마인가요?",
+        "candidate_evidence": [],
+    })["answer"]
+    for required in ("2,468,400원", "숙박비: 회사 숙소 제공으로 0원", "최종 지급·승인 여부는 담당 부서의 확인 후 결정됩니다."):
+        assert required in seoul, f"서울 파견 90일 계산 결과가 다릅니다: {required!r} / {seoul!r}"
+
+    missing_nights = build_dispatch_calculation_answer("일반 지역에 90일 파견하면 비용이 얼마인가요?")
+    assert "실제 숙박일수" in missing_nights, f"숙박일수 확인이 필요합니다: {missing_nights!r}"
+
+    missing_lodging = build_dispatch_calculation_answer("서울에 90일 파견하면 비용이 얼마인가요?")
+    assert "회사가 숙소를 제공" in missing_lodging, f"서울 숙소 제공 여부 확인이 필요합니다: {missing_lodging!r}"
+    print("통과 [D-03] 장기 파견 계산 및 최종 담당 부서 확인 안내")
 
 
 def check_used_evidence_selection():
@@ -467,6 +498,7 @@ def main():
     """보호 동작과 알려진 오답을 실행하고 전체 결과를 요약합니다."""
     check_reference_expansion()
     check_missing_chips()
+    check_dispatch_calculation()
     check_used_evidence_selection()
     protected = run_cases("A", PROTECTED_CASES)
     unresolved = run_cases("B", KNOWN_FAILURE_CASES)

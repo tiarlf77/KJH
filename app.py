@@ -31,6 +31,10 @@ SOURCE_FILES = {
 }
 # 규정의 '회갑'과 사용자가 자주 쓰는 '환갑'을 같은 의미로 처리합니다.
 HOEGAP_TERMS = ("회갑", "환갑")
+FINAL_REVIEW_NOTICE = "안내 내용은 사전 참고용이며, 최종 지급·승인 여부는 담당 부서의 확인 후 결정됩니다."
+DISPATCH_DAILY_ALLOWANCE = 33_000
+LODGING_PER_NIGHT = 50_000
+FULL_RATE_DAYS = 14
 
 
 
@@ -499,6 +503,118 @@ def conversation_context(question, history):
     return f"\n[대화 맥락 보완]\n{relation}\n{birthday}".strip()
 
 
+def append_final_review_notice(answer):
+    """모든 상담 답변에 최종 담당 부서 확인 안내를 한 번만 덧붙입니다."""
+    answer = answer.strip()
+    if FINAL_REVIEW_NOTICE in answer:
+        return answer
+    return f"{answer}\n\n{FINAL_REVIEW_NOTICE}"
+
+
+def extract_dispatch_days(question):
+    """자연어 질문에서 파견기간을 일수로 읽습니다. 한 달은 계산 기준상 30일로 봅니다."""
+    day_match = re.search(r"(?<!\d)(\d{1,4})\s*일(?:간)?", question)
+    if day_match:
+        return int(day_match.group(1))
+    month_match = re.search(r"(?<!\d)(\d{1,2})\s*(?:개월|달)", question)
+    if month_match:
+        return int(month_match.group(1)) * 30
+    return None
+
+
+def extract_lodging_nights(question):
+    """숙박비 계산에 필요한 실제 숙박일수를 읽습니다."""
+    match = re.search(r"(?<!\d)(\d{1,4})\s*박", question)
+    return int(match.group(1)) if match else None
+
+
+def is_dispatch_calculation_question(question):
+    """파견 기간별 금액을 묻는 경우에만 결정론적 계산 경로를 사용합니다."""
+    calculation_words = ("계산", "얼마", "금액", "지급", "파견경비", "숙박비", "숙박료", "파견비")
+    return "파견" in question and (
+        extract_dispatch_days(question) is not None or any(word in question for word in calculation_words)
+    )
+
+
+def build_dispatch_calculation_answer(question):
+    """확정된 장기 파견 지급률로 파견경비와 숙박비를 계산합니다."""
+    if not is_dispatch_calculation_question(question):
+        return None
+
+    days = extract_dispatch_days(question)
+    if days is None:
+        return "파견경비와 숙박비를 계산하려면 파견기간을 ‘90일’ 또는 ‘3개월’처럼 알려주세요."
+    if days < 1:
+        return "파견기간은 1일 이상으로 알려주세요."
+
+    is_seoul = "서울" in question
+    company_lodging = any(term in question for term in ("회사 숙소", "숙소 제공", "숙소를 제공", "숙소 제공받"))
+    if is_seoul and not company_lodging:
+        return "서울 파견은 회사가 숙소를 제공하는지에 따라 계산 방식이 달라집니다. 회사가 숙소를 제공하는지 알려주세요."
+
+    full_rate_days = min(days, FULL_RATE_DAYS)
+    reduced_rate_days = max(days - FULL_RATE_DAYS, 0)
+    full_dispatch = DISPATCH_DAILY_ALLOWANCE * full_rate_days
+
+    if is_seoul:
+        reduced_dispatch = DISPATCH_DAILY_ALLOWANCE * 80 // 100 * reduced_rate_days
+        dispatch_total = full_dispatch + reduced_dispatch
+        lines = [
+            f"서울 파견(회사 숙소 제공) {days}일 기준 예상 금액입니다.",
+            "",
+            "계산 결과",
+            f"- 1~{full_rate_days}일 파견경비: {DISPATCH_DAILY_ALLOWANCE:,}원 × {full_rate_days}일 = {full_dispatch:,}원",
+        ]
+        if reduced_rate_days:
+            lines.append(
+                f"- {FULL_RATE_DAYS + 1}~{days}일 파견경비: {DISPATCH_DAILY_ALLOWANCE:,}원 × 80% × {reduced_rate_days}일 = {reduced_dispatch:,}원"
+            )
+        lines.extend((
+            "- 숙박비: 회사 숙소 제공으로 0원",
+            f"- 총 예상 지급액: {dispatch_total:,}원",
+            "",
+            "교통비와 파견지에서 발생한 별도 출장비는 포함하지 않은 금액입니다.",
+        ))
+        return "\n".join(lines)
+
+    nights = extract_lodging_nights(question)
+    if nights is None:
+        return f"파견기간은 {days}일로 확인됩니다. 숙박비까지 계산하려면 실제 숙박일수를 ‘{days}박’처럼 알려주세요."
+    if nights < 1:
+        return "실제 숙박일수는 1박 이상으로 알려주세요."
+
+    full_rate_nights = min(nights, FULL_RATE_DAYS)
+    reduced_rate_nights = max(nights - FULL_RATE_DAYS, 0)
+    reduced_dispatch = DISPATCH_DAILY_ALLOWANCE * 60 // 100 * reduced_rate_days
+    full_lodging = LODGING_PER_NIGHT * full_rate_nights
+    reduced_lodging = LODGING_PER_NIGHT * 60 // 100 * reduced_rate_nights
+    dispatch_total = full_dispatch + reduced_dispatch
+    lodging_total = full_lodging + reduced_lodging
+    lines = [
+        f"일반 지역 파견 {days}일·숙박 {nights}박 기준 예상 금액입니다.",
+        "",
+        "계산 결과",
+        f"- 1~{full_rate_days}일 파견경비: {DISPATCH_DAILY_ALLOWANCE:,}원 × {full_rate_days}일 = {full_dispatch:,}원",
+        f"- 1~{full_rate_nights}박 숙박비: {LODGING_PER_NIGHT:,}원 × {full_rate_nights}박 = {full_lodging:,}원",
+    ]
+    if reduced_rate_days:
+        lines.append(
+            f"- {FULL_RATE_DAYS + 1}~{days}일 파견경비: {DISPATCH_DAILY_ALLOWANCE:,}원 × 60% × {reduced_rate_days}일 = {reduced_dispatch:,}원"
+        )
+    if reduced_rate_nights:
+        lines.append(
+            f"- {FULL_RATE_DAYS + 1}~{nights}박 숙박비: {LODGING_PER_NIGHT:,}원 × 60% × {reduced_rate_nights}박 = {reduced_lodging:,}원"
+        )
+    lines.extend((
+        f"- 파견경비 합계: {dispatch_total:,}원",
+        f"- 숙박비 합계: {lodging_total:,}원",
+        f"- 총 예상 지급액: {dispatch_total + lodging_total:,}원",
+        "",
+        "교통비와 파견지에서 발생한 별도 출장비는 포함하지 않은 금액입니다.",
+    ))
+    return "\n".join(lines)
+
+
 
 def build_clarification_answer(question):
     """제도 유형을 알 수 없는 질문에 전체 상담 범위와 재질문 형식을 안내합니다."""
@@ -550,7 +666,7 @@ def call_openai(question, evidence, history=None):
         "불확실한 질의는 세 유형으로 구분한다. 제도 자체를 식별할 수 없으면 어떤 제도·비용인지 구체화를 요청한다. 제도는 식별되지만 정보가 부족하면 부족한 정보만 요청한다. 관련 규정이 없거나 충돌하면 지급 여부를 확정하지 말고 주관 부서 문의를 안내한다. "
         "근거에 없는 금액·조건·사실은 추측하지 않는다. 질문 의도를 먼저 파악하고, "
         "가능 여부를 단정하기 어려우면 필요한 추가 정보를 질문한다. 답변은 자연스러운 대화체로 작성하되 부연 설명은 최소화한다. "
-        "답변 마지막에는 '확인한 규정'과 파일명을 간단히 표시한다. 최종 승인·지급은 담당 부서 검토임을 안내한다. "
+        "답변 마지막에는 '확인한 규정'과 파일명을 간단히 표시한다. 최종 문장은 '안내 내용은 사전 참고용이며, 최종 지급·승인 여부는 담당 부서의 확인 후 결정됩니다.'로 작성한다. "
         "규정에 명시된 예외만 적용하고, 규정에 없는 예외나 담당자 재량은 사용자에게 확인 질문으로 남긴다. "
         f"오늘 기준일은 {date.today().isoformat()}이다. 경조금은 회갑 대상 여부와 신청기한을 별도로 판단한다. "
         # 청구권 3개월·회갑 대상·지급액 20만원은 경조금 지급기준.md에 이미 있고 검색이 항상
@@ -566,7 +682,7 @@ def call_openai(question, evidence, history=None):
         "결혼·회갑·출산장려금·사망 등 경조금 답변은 반드시 공통 양식을 따른다. 첫 줄에는 해당 여부를 한 문장으로만 답한다. "
         "이후 빈 줄 뒤에 '확인 결과'를 쓰고, '- 관계:', '- 생년월일:'(확인된 경우만), '- 사유 발생일:'(확인된 경우만), "
         "'- 신청 마감일:'(계산 가능한 경우만), '- 현재 기준일:', '- 판정:', '- 지원금:', '- 필요 서류:' 순서로 필요한 항목만 한 번씩 작성한다. "
-        "그 뒤 빈 줄 뒤에 신청 가능 여부 또는 추가로 필요한 정보만 한두 문장으로 쓰고, 마지막 문장은 '최종 승인·지급은 담당 부서의 서류 검토를 거쳐 결정됩니다.'로 끝낸다. "
+        "그 뒤 빈 줄 뒤에 신청 가능 여부 또는 추가로 필요한 정보만 한두 문장으로 쓰고, 마지막 문장은 '안내 내용은 사전 참고용이며, 최종 지급·승인 여부는 담당 부서의 확인 후 결정됩니다.'로 끝낸다. "
         "같은 내용을 반복하거나 현재 질문과 무관한 제도를 언급하지 않는다. "
         "사망 문의에서는 첫 문장을 '경조금 지급 대상입니다.'처럼 간단히 작성하고 '해당됩니다'로 시작하지 않는다. "
         "사망일을 아직 받지 못한 경우 사망일로부터 3개월 이내 신청해야 한다는 문장과 사망일 요청 문장을 쓰지 않는다. "
@@ -997,7 +1113,14 @@ def generate_answer_node(state: ConsultationState):
     history = state.get("history", [])
     candidate_evidence = state.get("candidate_evidence", [])
     missing = []
-    if not candidate_evidence:
+    calculation_answer = build_dispatch_calculation_answer(question)
+    if calculation_answer:
+        answer = calculation_answer
+        used_evidence = [
+            item for item in candidate_evidence
+            if item.get("file") in {"여비관리기준.md", "사내 추가 기준.md"}
+        ]
+    elif not candidate_evidence:
         answer = build_unknown_policy_answer(question)
         used_evidence = []
     else:
@@ -1015,6 +1138,7 @@ def generate_answer_node(state: ConsultationState):
                 answer = build_escalation_answer(judgement.get("reason", ""), used_evidence)
         else:
             answer = call_openai(question, used_evidence, history)
+    answer = append_final_review_notice(answer)
     result = {"answer": answer, "used_evidence": used_evidence}
     # 동호회 신규 신청 문의에는 답변 경로와 무관하게 메일 초안 버튼을 띄웁니다.
     if is_club_application_question(question):
