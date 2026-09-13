@@ -25,6 +25,11 @@ load_env()
 # (질문, 답변에 있어야 할 문자열, 답변에 없어야 할 문자열[, 이전 대화 이력])
 # 이력은 이전 주제가 새 질문을 덮어쓰는지 보는 사례에만 붙입니다.
 PROTECTED_CASES = [
+    (
+        "\uad6d\ub0b4\ucd9c\uc7a5 \uc9c0\uc6d0 \uae30\uc900\uc5d0\uc11c \uad50\ud1b5\ube44\u00b7\uc18c\uc561\uacbd\ube44\u00b7\uc219\ubc15\ube44\uc758 \uc9c0\uae09 \uc870\uac74\uc744 \uc54c\ub824\uc918.",
+        ("\uc18c\uc561\uacbd\ube44", "\uc219\ubc15\ube44"),
+        ("\uc784\uc6d0", "P7", "P8", "\uc2e4\uc7a5"),
+    ),
     # 경조금 지급기준 5.2·5.3: 본인 형제·자매 결혼은 20만원과 부모 기준 증빙을 안내한다.
     (
         "제 동생이 결혼하는데 경조금과 필요한 서류 알려줘",

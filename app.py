@@ -817,6 +817,24 @@ def is_club_application_question(question):
 
 
 
+RANK_REFERENCE_PATTERN = re.compile(r"(?:\uC784\uC6D0|P\d+|\uC2E4\uC7A5|\uD2B8\uB7AD\uc7a5|\ubd80\uc7a5)", re.IGNORECASE)
+
+
+def question_mentions_rank(question):
+    """Use rank-specific policy details only when the user explicitly asks for them."""
+    return bool(RANK_REFERENCE_PATTERN.search(question))
+
+
+def hide_unrequested_rank_references(answer, question):
+    """Remove rank-specific lines from a general policy overview."""
+    if question_mentions_rank(question):
+        return answer
+    return "\n".join(
+        line for line in answer.splitlines()
+        if not RANK_REFERENCE_PATTERN.search(line)
+    ).strip()
+
+
 def call_openai(question, evidence, history=None):
     """검색 근거를 포함해 Responses API를 호출합니다."""
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
@@ -827,6 +845,7 @@ def call_openai(question, evidence, history=None):
         for i, item in enumerate(evidence, 1)
     ) or "관련 규정 근거를 찾지 못했습니다."
     instructions = (
+        "For a general policy question that does not explicitly mention an executive, job grade, or title, do not introduce executive, job-grade, or title-specific criteria or exceptions. Give only common criteria. When the user explicitly asks about a specific executive, job grade, or title, provide only the applicable criteria from the evidence. "
         "너는 사내 복리후생 규정 상담 Agent다. 네 개의 제공된 원문 규정을 기준 데이터로 사용하며, 반드시 제공된 근거만 사용해 한국어로 답한다. "
         "불확실한 질의는 세 유형으로 구분한다. 제도 자체를 식별할 수 없으면 어떤 제도·비용인지 구체화를 요청한다. 제도는 식별되지만 정보가 부족하면 부족한 정보만 요청한다. 관련 규정이 없거나 충돌하면 지급 여부를 확정하지 말고 주관 부서 문의를 안내한다. "
         "근거에 없는 금액·조건·사실은 추측하지 않는다. 질문 의도를 먼저 파악하고, "
@@ -909,13 +928,14 @@ def call_openai(question, evidence, history=None):
     with urlopen(request, timeout=45) as response:
         data = json.loads(response.read().decode("utf-8"))
     if data.get("output_text"):
-        return data["output_text"]
+        return hide_unrequested_rank_references(data["output_text"], question)
     parts = []
     for output in data.get("output", []):
         for content in output.get("content", []):
             if content.get("type") == "output_text":
                 parts.append(content.get("text", ""))
-    return "\n".join(parts).strip() or "응답 내용을 확인하지 못했습니다."
+    answer = "\n".join(parts).strip() or "No response text was returned."
+    return hide_unrequested_rank_references(answer, question)
 
 
 POLICY_INTENTS = ("ceremony", "housing", "relocation", "trip", "club", "other")
