@@ -566,9 +566,12 @@ def is_monthly_breakdown_question(question):
 
 def is_dispatch_calculation_question(question):
     """파견 기간별 금액을 묻는 경우에만 결정론적 계산 경로를 사용합니다."""
-    calculation_words = ("계산", "얼마", "금액", "지급", "파견경비", "숙박비", "숙박료", "파견비")
+    # '지급 항목', '지원 대상', '신청 절차'는 전체 기준을 묻는 표현이다.
+    # 파견기간이 포함됐더라도 비용을 계산해 달라는 의도가 드러날 때만 계산 경로로 보낸다.
+    calculation_words = ("계산", "얼마", "금액", "비용", "파견경비", "숙박비", "숙박료", "파견비")
     return "파견" in question and (
-        extract_dispatch_days(question) is not None or any(word in question for word in calculation_words)
+        any(word in question for word in calculation_words)
+        or is_monthly_breakdown_question(question)
     )
 
 

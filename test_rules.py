@@ -446,6 +446,11 @@ def check_missing_chips():
 
 def check_dispatch_calculation():
     """사용자가 확정한 장기 파견 계산식과 담당 부서 확인 안내를 API 없이 검증합니다."""
+    overview_question = "여비관리 기준에서 출장·파견·부임 관련 지원 대상, 지급 항목, 한도 및 신청 절차를 알려줘."
+    assert build_dispatch_calculation_answer(overview_question) is None, (
+        "전체 기준 안내의 '지급 항목'을 파견경비 계산 요청으로 처리했습니다."
+    )
+
     normal = generate_answer_node({
         "question": "일반 지역에 90일 파견하고 90박 숙박하면 파견경비와 숙박비가 얼마인가요?",
         "candidate_evidence": [],
