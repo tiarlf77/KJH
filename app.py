@@ -1495,6 +1495,13 @@ class Handler(SimpleHTTPRequestHandler):
         except Exception:
             self.respond(500, {"error": "상담 처리 중 오류가 발생했습니다."})
 
+    def end_headers(self):
+        page_path = self.path.split("?", 1)[0]
+        if page_path in ("/", "/index.html"):
+            self.send_header("Cache-Control", "no-store, max-age=0")
+            self.send_header("Pragma", "no-cache")
+        super().end_headers()
+
     def do_GET(self):
         """규정 원문 링크와 기존 정적 파일을 제공합니다."""
         if self.path == "/api/inquiries":
