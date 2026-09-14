@@ -558,6 +558,15 @@ def is_seoul_dispatch(question):
     return extract_dispatch_destination(question) == "서울"
 
 
+def is_home_location_dispatch(question):
+    """자택 소재지로 파견 명령을 받은 경우인지 확인합니다.
+
+    여비관리기준 5.15.1에 따라 이 경우는 파견비 지급 대상이 아니므로,
+    기간을 물어 계산하는 경로로 보내지 않고 바로 제외 사실을 안내해야 합니다.
+    """
+    return "파견" in question and any(term in question for term in ("자택", "집이 있는 지역"))
+
+
 def is_monthly_breakdown_question(question):
     """총액을 30일 단위 구간으로 나눠 달라는 요청인지 확인합니다."""
     normalized = re.sub(r"\s+", "", question)
@@ -702,6 +711,16 @@ def build_dispatch_calculation_answer(question):
     """확정된 장기 파견 지급률로 파견경비와 숙박비를 계산합니다."""
     if not is_dispatch_calculation_question(question):
         return None
+
+    if is_home_location_dispatch(question):
+        return (
+            "자택 소재지로 파견 명령을 받은 경우에는 파견비 지급 대상이 아닙니다.\n\n"
+            "규정 확인\n"
+            "- 판정: 자택 소재지로 파견 명령을 받으면 파견비를 지급하지 않습니다.\n"
+            "- 자택 소재지 판단 기준: 미혼자는 부모 주소지, 기혼자는 배우자 주소지\n"
+            "- 참고: 이전 근무지와 파견지 근무지가 동일한 경우에도 파견비 지급 대상이 아닙니다.\n\n"
+            "확인한 규정: 여비관리기준.md 5.15.1 일반 파견 근무자"
+        )
 
     days = extract_dispatch_days(question)
     if days is None:

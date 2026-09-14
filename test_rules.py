@@ -532,6 +532,19 @@ def check_dispatch_calculation():
         "전체 기준 안내의 '지급 항목'을 파견경비 계산 요청으로 처리했습니다."
     )
 
+    home_location = build_dispatch_calculation_answer(
+        "자택이 있는 지역으로 파견 명령을 받았는데 파견비를 받을 수 있나요?"
+    )
+    assert "파견비 지급 대상이 아닙니다" in home_location, (
+        f"자택 소재지 파견의 지급 제외 규정을 안내하지 않았습니다: {home_location!r}"
+    )
+    assert "파견기간을" not in home_location, (
+        f"자택 소재지 파견을 기간 계산 경로로 처리했습니다: {home_location!r}"
+    )
+    assert "미혼자는 부모 주소지, 기혼자는 배우자 주소지" in home_location, (
+        f"자택 소재지 판단 기준이 누락되었습니다: {home_location!r}"
+    )
+
     normal = generate_answer_node({
         "question": "일반 지역에 90일 파견하고 90박 숙박하면 파견경비와 숙박비가 얼마인가요?",
         "candidate_evidence": [],
