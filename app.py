@@ -822,6 +822,12 @@ def is_ceremony_overview_question(question):
     return "경조금" in normalized and all(term in normalized for term in required_terms)
 
 
+def is_birth_grant_question(question):
+    """출산지원금과 출산장려금의 단순 안내 질문을 구분합니다."""
+    normalized = re.sub(r"\s+", "", question)
+    return "출산지원금" in normalized or "출산장려금" in normalized
+
+
 def is_travel_overview_question(question):
     """여비 카드가 묻는 국내출장 세 지급 항목의 전체 안내를 구분합니다."""
     normalized = re.sub(r"\s+", "", question)
@@ -879,11 +885,19 @@ OVERVIEW_EVIDENCE_PATHS = {
 }
 
 
-def overview_policy_evidence(policy_file):
-    """카드 답변에 실제 사용한 조항만 규정 순서에 맞춰 반환합니다."""
+BIRTH_GRANT_EVIDENCE_PATHS = (
+    "5.2 경조금 지급기준",
+    "5.3 서류제출",
+    "5.4 지급제한",
+    "5.6 유효기간",
+)
+
+
+def policy_evidence_by_paths(policy_file, path_terms):
+    """고정 안내 답변에 실제 사용한 조항만 규정 순서에 맞춰 반환합니다."""
     chunks, _, _ = load_policy_index()
     selected = []
-    for path_term in OVERVIEW_EVIDENCE_PATHS[policy_file]:
+    for path_term in path_terms:
         for item in chunks:
             if item["file"] == policy_file and path_term in item["path"]:
                 selected.append({
@@ -892,6 +906,16 @@ def overview_policy_evidence(policy_file):
                     "text": item["text"],
                 })
     return selected
+
+
+def overview_policy_evidence(policy_file):
+    """카드 답변에 실제 사용한 조항을 반환합니다."""
+    return policy_evidence_by_paths(policy_file, OVERVIEW_EVIDENCE_PATHS[policy_file])
+
+
+def birth_grant_evidence():
+    """출산장려금의 지급표·서류·제한·기한 조항을 함께 반환합니다."""
+    return policy_evidence_by_paths("경조금 지급기준.md", BIRTH_GRANT_EVIDENCE_PATHS)
 
 
 def build_travel_overview_answer():
@@ -947,6 +971,29 @@ def build_ceremony_overview_answer():
   - 가족관계증명서는 사망 대상 관계에 따라 본인·부모·배우자·배우자 부모 기준으로 제출합니다.
 
 일용직과 급여 지급이 정지된 직원은 지급 대상에서 제외됩니다."""
+
+
+def build_birth_grant_answer():
+    """출산장려금 질문에 지급액과 신청 기한이 빠지지 않도록 고정 안내합니다."""
+    return """출산장려금 기준을 안내드립니다.
+
+1. 지급 대상
+- 직원 또는 직원 배우자가 자녀를 출산한 경우
+- 만 6세 미만 자녀를 입양한 경우
+
+2. 지급 금액
+- 첫째 3,000,000원
+- 둘째 7,000,000원
+- 셋째 이상 10,000,000원
+- 사내부부는 1명에게만 지급합니다.
+
+3. 신청 기한
+- 사유 발생일로부터 3개월 이내에 신청해야 합니다.
+
+4. 필요 서류와 신청 방법
+- 출생증명서, 주민등록등본을 인사노무 관련 시스템의 경조사 신청 화면에 첨부하고 소속 부서장 결재를 받아야 합니다.
+
+급여 지급이 정지된 직원은 지급 대상에서 제외됩니다."""
 
 
 def build_housing_overview_answer():
@@ -1508,6 +1555,8 @@ def resolve_question_node(state: ConsultationState):
 def retrieve_policy_node(state: ConsultationState):
     """현재 제도 질문에 맞는 규정 근거를 검색합니다."""
     question = state.get("resolved") or state["question"]
+    if is_birth_grant_question(question):
+        return {"candidate_evidence": birth_grant_evidence()}
     policy_file = overview_policy_file(question)
     if policy_file:
         return {"candidate_evidence": overview_policy_evidence(policy_file)}
@@ -1521,6 +1570,18 @@ def retrieve_policy_node(state: ConsultationState):
 def analyze_question_node(state: ConsultationState):
     """검색 근거로 답할 수 있는지와 함께 제도 영역·대상 관계를 한 번에 뽑습니다."""
     question = state.get("resolved") or state["question"]
+    if is_birth_grant_question(question):
+        return {
+            "analysis": {
+                "verdict": "answerable",
+                "reason": "출산장려금의 정해진 지급 기준 안내입니다.",
+                "missing": [],
+                "finding": "",
+                "intent": "ceremony",
+                "relation": None,
+                "evidence_ids": [],
+            }
+        }
     policy_file = overview_policy_file(question)
     if policy_file:
         intent = {
@@ -1612,7 +1673,13 @@ def generate_answer_node(state: ConsultationState):
     candidate_evidence = state.get("candidate_evidence", [])
     missing = []
     policy_file = overview_policy_file(question)
-    if policy_file:
+    if is_birth_grant_question(question):
+        answer = build_birth_grant_answer()
+        used_evidence = [
+            item for item in candidate_evidence
+            if item.get("file") == "경조금 지급기준.md"
+        ]
+    elif policy_file:
         answer_builder = {
             "여비관리기준.md": build_travel_overview_answer,
             "경조금 지급기준.md": build_ceremony_overview_answer,
