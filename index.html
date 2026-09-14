@@ -13,7 +13,7 @@
     button{color:inherit}
     .app{min-height:100vh;display:flex}
     .sidebar{position:fixed;inset:0 auto 0 0;width:264px;background:linear-gradient(145deg,#edf6e9 0%,#f5f9f2 68%,#eef6ea 100%);border-right:1px solid #dce7d8;display:flex;flex-direction:column;padding:18px 14px 14px;z-index:5}
-    .brand-row{display:flex;align-items:center;gap:11px;padding:0 8px 18px}.mark{width:38px;height:38px;border-radius:11px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:800;font-size:18px;box-shadow:0 5px 14px #36573a24}.brand{font-weight:760;font-size:17px}
+    .brand-row{display:flex;align-items:center;gap:11px;padding:0 8px 18px}.home-button{border:0;background:transparent;padding:0;cursor:pointer}.home-button:focus-visible{outline:3px solid #9fc39b;outline-offset:3px}.mark{width:38px;height:38px;border-radius:11px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:800;font-size:18px;box-shadow:0 5px 14px #36573a24}.brand{font-weight:760;font-size:17px;text-align:left}
     .new-chat{border:0;background:var(--accent);color:#fff;border-radius:11px;padding:13px 15px;display:flex;align-items:center;gap:11px;font-weight:700;cursor:pointer;box-shadow:0 5px 14px #36573a1f}.new-chat span{font-size:22px;font-weight:400;line-height:1}
     .sidebar nav{min-height:0;overflow:auto}.nav-section{margin-top:25px}.nav-title{padding:0 10px 8px;color:#777f75;font-size:12px;font-weight:700}.nav-item{width:100%;border:0;background:transparent;border-radius:10px;padding:10px 11px;display:flex;align-items:center;gap:11px;text-align:left;cursor:pointer;font-size:14px}.nav-item:hover,.nav-item.active{background:#e1ecdd}.nav-icon{width:20px;text-align:center;color:#435244}.sidebar-rule{border:0;border-top:1px solid #dbe6d7;margin:18px 8px 0}
     .recent-section{margin-top:22px}.recent-head{display:flex;align-items:center;justify-content:space-between;padding:0 7px 7px 10px}.recent-head .nav-title{padding:0}.clear-history{border:0;background:transparent;color:var(--muted);font-size:11px;padding:3px;cursor:pointer}.clear-history:hover{color:var(--accent-dark)}.recent-list{display:grid;gap:3px}.recent-empty,.storage-note{padding:7px 10px;color:var(--muted);font-size:11px;line-height:1.5}.recent-item{display:grid;grid-template-columns:minmax(0,1fr) 24px;align-items:center;border-radius:9px}.recent-item:hover,.recent-item.active{background:#e1ecdd}.recent-open{min-width:0;border:0;background:transparent;padding:9px 4px 9px 11px;text-align:left;cursor:pointer}.recent-title{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}.recent-date{display:block;color:var(--muted);font-size:10px;margin-top:3px}.recent-delete{border:0;background:transparent;color:#7e847c;width:24px;height:28px;border-radius:6px;cursor:pointer}.recent-delete:hover{background:#d2e0ce;color:#83453e}.storage-note{margin-top:5px}.mobile-menu{display:none;border:0;background:transparent;font-size:22px;padding:4px;cursor:pointer}.sidebar-backdrop{display:none}
@@ -31,7 +31,7 @@
 <body>
   <div class="app">
     <aside class="sidebar" aria-label="주 메뉴">
-      <div class="brand-row"><div class="mark">복</div><div class="brand">복리후생 AI 상담</div></div>
+      <div class="brand-row"><button class="home-button mark" type="button" data-action="home" aria-label="홈으로 이동">P</button><button class="home-button brand" type="button" data-action="home">복리후생 AI 상담 챗봇</button></div>
       <button class="new-chat" type="button"><span>＋</span>새 상담</button>
       <nav>
         <div class="recent-section">
@@ -54,7 +54,7 @@
     </aside>
     <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
     <div class="workspace">
-      <header class="mobile-top"><button id="mobile-menu" class="mobile-menu" type="button" aria-label="최근 상담 메뉴 열기">☰</button><div class="mark">복</div><div class="brand">복리후생 AI 상담</div></header>
+      <header class="mobile-top"><button id="mobile-menu" class="mobile-menu" type="button" aria-label="최근 상담 메뉴 열기">☰</button><button class="home-button mark" type="button" data-action="home" aria-label="홈으로 이동">복</button><button class="home-button brand" type="button" data-action="home">복리후생 AI 상담</button></header>
       <div class="content-grid">
         <main class="main-content">
           <section class="hero" id="hero">
@@ -63,9 +63,9 @@
             <p>사내 규정을 근거로 복리후생 상담과 신청 조건 확인을 도와드립니다.</p>
             <div class="suggestions">
               <button class="suggestion" type="button" data-question="국내출장 지원 기준에서 교통비·소액경비·숙박비의 지급 조건을 알려줘."><span class="suggestion-icon">✈</span><span><strong>여비관리 기준</strong><small>국내출장의 교통비·소액경비·숙박비 기준을 확인해 보세요.</small></span><span class="suggestion-arrow">›</span></button>
-              <button class="suggestion" type="button" data-question="경조금 지원 기준에서 지급 대상, 금액, 신청 기한과 필요 서류를 알려줘."><span class="suggestion-icon">♧</span><span><strong>경조금 지급 기준</strong><small>지급 대상, 금액, 신청 기한과 필요 서류를 확인해 보세요.</small></span><span class="suggestion-arrow">›</span></button>
+              <button class="suggestion" type="button" data-question="경조금 지원 기준에서 지급 대상, 금액, 신청 기한과 필요 서류를 알려줘."><span class="suggestion-icon">♧</span><span><strong>경조금 지급 기준</strong><small>결혼, 출산지원금, 회갑, 사망 지원금과 필요 서류를 확인해 보세요.</small></span><span class="suggestion-arrow">›</span></button>
               <button class="suggestion" type="button" data-question="숙소지원금은 어떤 직원이 받을 수 있고, 제외되는 경우는 무엇인가요?"><span class="suggestion-icon">⌂</span><span><strong>숙소지원금 기준</strong><small>지원 대상과 제외 조건을 확인해 보세요.</small></span><span class="suggestion-arrow">›</span></button>
-              <button class="suggestion" type="button" data-question="동호회 지원을 받으려면 어떤 기준을 충족해야 하나요?"><span class="suggestion-icon">♙</span><span><strong>동호회 기준</strong><small>등록과 활동비 지원 조건을 확인해 보세요.</small></span><span class="suggestion-arrow">›</span></button>
+              <button class="suggestion" type="button" data-question="동호회 지원을 받으려면 어떤 기준을 충족해야 하나요?"><span class="suggestion-icon">♙</span><span><strong>동호회 기준</strong><small>개설과 활동비 지원 조건을 확인해 보세요.</small></span><span class="suggestion-arrow">›</span></button>
             </div>
           </section>
           <section id="chat" class="chat"><div class="empty">질문을 입력하면 관련 규정을 찾아 답변해 드립니다.</div></section>
@@ -98,6 +98,7 @@
     document.querySelectorAll('[data-question]').forEach(button=>button.addEventListener('click',()=>{input.value=button.dataset.question;input.dispatchEvent(new Event('input'));form.requestSubmit()}));
     document.querySelector('[data-action="history"]').addEventListener('click',()=>{closeMobileSidebar();const history=document.querySelector('#inquiry-history');history.classList.add('visible');history.scrollIntoView({behavior:'smooth',block:'center'})});
     document.querySelectorAll('.new-chat,[data-action="new"]').forEach(button=>button.addEventListener('click',resetChat));
+    document.querySelectorAll('[data-action="home"]').forEach(button=>button.addEventListener('click',resetChat));
     document.querySelector('#mobile-menu').addEventListener('click',openMobileSidebar);
     document.querySelector('#sidebar-backdrop').addEventListener('click',closeMobileSidebar);
     document.querySelector('#clear-chat-history').addEventListener('click',clearChatHistory);
