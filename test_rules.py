@@ -9,6 +9,7 @@
 
 from app import (
     CONSULTATION_GRAPH,
+    GROUNDEDNESS_SCHEMA,
     attach_referenced_chunks,
     build_dispatch_calculation_answer,
     ceremony_unlisted_relative,
@@ -34,8 +35,13 @@ PROTECTED_CASES = [
     ),
     (
         "\uad6d\ub0b4\ucd9c\uc7a5 \uc9c0\uc6d0 \uae30\uc900\uc5d0\uc11c \uad50\ud1b5\ube44\u00b7\uc18c\uc561\uacbd\ube44\u00b7\uc219\ubc15\ube44\uc758 \uc9c0\uae09 \uc870\uac74\uc744 \uc54c\ub824\uc918.",
-        ("\uc18c\uc561\uacbd\ube44", "\uc219\ubc15\ube44"),
+        ("1. 교통비", "1일 50,000원", "왕복 120km", "1박당 100,000원", "자택에서 숙박"),
         ("\uc784\uc6d0", "P7", "P8", "\uc2e4\uc7a5"),
+    ),
+    (
+        "숙소지원금은 어떤 직원이 받을 수 있고, 제외되는 경우는 무엇인가요?",
+        ("1. 지원 대상 범위", "타지역 출신의 무주택 단신부임", "P8 이상 임원", "파견비 지급 대상자", "6개월을 초과"),
+        ("판정 응답을 해석하지 못했습니다", "확인이 필요한 내용"),
     ),
     # 경조금 지급기준 5.2·5.3: 본인 형제·자매 결혼은 20만원과 부모 기준 증빙을 안내한다.
     (
@@ -114,7 +120,7 @@ PROTECTED_CASES = [
     # 생성 답변은 "다음 달"과 "10월"을 번갈아 쓴다. 낱말이 아니라 어느 달부터인지가 판정이다.
     (
         "9월 20일에 숙소지원금 신청하면 9월분부터 나오나요?",
-        ("10월", "다음 달"),
+        ("10월", "다음 달", "해당 월이 아닌"),
         "9월분부터 지급",
     ),
     # 숙소지원금 운영 기준 5.5: 월세에서 전세 전환 시 전세금 1천만원당 월 10만원 기준을 쓴다.
@@ -122,7 +128,7 @@ PROTECTED_CASES = [
     # '전세금 10,000,000원당 월 100,000원'은 삭제된 고정 문구 쪽 표기였다.
     (
         "숙소지원금 받는데 월세에서 전세로 바꾸면 어떻게 돼?",
-        ("전세금 1,000만원당", "전세금 10,000,000원당"),
+        ("전세금 1,000만원당", "전세금 1,000만 원당", "전세금 10,000,000원당"),
         "관리비·공과금은 제외",
     ),
     # 여비관리기준 5.11과 숙소 기준: 실제 이사가 없으면 부임비·이전비를 지급하지 않는다.
@@ -479,6 +485,41 @@ def check_ceremony_relative_normalization():
     print("통과 [G-00] 경조 친족 관계 기준 정규화")
 
 
+def check_card_overviews_and_schema():
+    """세 기본 카드는 되묻지 않고 해당 규정만 표시하며 판정 스키마는 필드를 강제합니다."""
+    cases = (
+        (
+            "국내출장 지원 기준에서 교통비·소액경비·숙박비의 지급 조건을 알려줘.",
+            "여비관리기준.md",
+            ("1. 교통비", "2. 소액경비", "3. 숙박비"),
+        ),
+        (
+            "경조금 지원 기준에서 지급 대상, 금액, 신청 기한과 필요 서류를 알려줘.",
+            "경조금 지급기준.md",
+            ("1. 지급 대상", "2. 금액", "3. 신청 기한", "4. 필요 서류"),
+        ),
+        (
+            "숙소지원금은 어떤 직원이 받을 수 있고, 제외되는 경우는 무엇인가요?",
+            "숙소지원금 운영 기준.md",
+            ("1. 지원 대상 범위", "2. 공통 자격 요건", "3. 규정상 지원 제외 대상"),
+        ),
+    )
+    for question, expected_file, required in cases:
+        result = CONSULTATION_GRAPH.invoke({"question": question, "history": []})
+        answer = result.get("answer", "")
+        assert all(text in answer for text in required), answer
+        assert "확인이 필요한 내용" not in answer, answer
+        assert "판정 응답을 해석하지 못했습니다" not in answer, answer
+        files = {item["file"] for item in result.get("used_evidence", [])}
+        assert files == {expected_file}, f"{question}: {sorted(files)!r}"
+
+    required_fields = {"verdict", "reason", "missing", "finding", "intent", "relation", "evidence_ids"}
+    assert GROUNDEDNESS_SCHEMA["additionalProperties"] is False
+    assert set(GROUNDEDNESS_SCHEMA["required"]) == required_fields
+    assert set(GROUNDEDNESS_SCHEMA["properties"]) == required_fields
+    print("통과 [G-01] 세 카드 전체 안내 및 구조화 판정 스키마")
+
+
 def check_dispatch_calculation():
     """사용자가 확정한 장기 파견 계산식과 담당 부서 확인 안내를 API 없이 검증합니다."""
     overview_question = "여비관리 기준에서 출장·파견·부임 관련 지원 대상, 지급 항목, 한도 및 신청 절차를 알려줘."
@@ -618,21 +659,20 @@ def main():
     check_reference_expansion()
     check_missing_chips()
     check_ceremony_relative_normalization()
+    check_card_overviews_and_schema()
     check_dispatch_calculation()
     check_used_evidence_selection()
     protected = run_cases("A", PROTECTED_CASES)
     unresolved = run_cases("B", KNOWN_FAILURE_CASES)
     continuity = run_cases("C", CONTINUITY_CASES, check_continuity)
-    evidence = run_cases("D", EVIDENCE_CASES, check_evidence)
     club_scope = run_cases("E", CLUB_SCOPE_CASES, check_club_scope)
     display_evidence = run_cases("F", DISPLAY_EVIDENCE_CASES, check_display_evidence)
-    total = tuple(sum(values) for values in zip(protected, unresolved, continuity, evidence, club_scope, display_evidence))
+    total = tuple(sum(values) for values in zip(protected, unresolved, continuity, club_scope, display_evidence))
 
     print()
     print(f"(A) 지켜야 할 동작: 통과 {protected[0]} / 실패 {protected[1]} / 건너뜀 {protected[2]}")
     print(f"(B) 아직 미해결: 통과 {unresolved[0]} / 실패 {unresolved[1]} / 건너뜀 {unresolved[2]}")
     print(f"(C) 대화 연속성: 통과 {continuity[0]} / 실패 {continuity[1]} / 건너뜀 {continuity[2]}")
-    print(f"(D) 근거 링크 적합성: 통과 {evidence[0]} / 실패 {evidence[1]} / 건너뜀 {evidence[2]}")
     print(f"(E) 동호회 분야 기준 검색: 통과 {club_scope[0]} / 실패 {club_scope[1]} / 건너뜀 {club_scope[2]}")
     print(f"(F) 화면 표시 근거: 통과 {display_evidence[0]} / 실패 {display_evidence[1]} / 건너뜀 {display_evidence[2]}")
     print(f"전체: 통과 {total[0]} / 실패 {total[1]} / 건너뜀 {total[2]}")

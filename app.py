@@ -822,6 +822,99 @@ def is_ceremony_overview_question(question):
     return "경조금" in normalized and all(term in normalized for term in required_terms)
 
 
+def is_travel_overview_question(question):
+    """여비 카드가 묻는 국내출장 세 지급 항목의 전체 안내를 구분합니다."""
+    normalized = re.sub(r"\s+", "", question)
+    required_terms = ("교통비", "소액경비", "숙박비")
+    return "국내출장" in normalized and all(term in normalized for term in required_terms)
+
+
+def is_housing_overview_question(question):
+    """숙소지원금 카드가 묻는 지원 대상과 제외 조건의 전체 안내를 구분합니다."""
+    normalized = re.sub(r"\s+", "", question)
+    target_terms = ("어떤직원", "지원대상", "받을수")
+    exclusion_terms = ("제외", "지원제외")
+    return (
+        "숙소지원금" in normalized
+        and any(term in normalized for term in target_terms)
+        and any(term in normalized for term in exclusion_terms)
+    )
+
+
+def overview_policy_file(question):
+    """카드형 전체 안내 질문과 그 질문에 표시할 원문 규정을 연결합니다."""
+    if is_travel_overview_question(question):
+        return "여비관리기준.md"
+    if is_ceremony_overview_question(question):
+        return "경조금 지급기준.md"
+    if is_housing_overview_question(question):
+        return "숙소지원금 운영 기준.md"
+    return None
+
+
+OVERVIEW_EVIDENCE_PATHS = {
+    "여비관리기준.md": (
+        "5.10.1 교통비",
+        "5.10.2 소액경비 및 숙박비",
+        "5.14.2 자가차량 또는 대중교통 이용 시",
+        "5.14.3 자가차량 동승자",
+        "5.8 여비 지급의 제한",
+        "별첨 1. 국내여비기준표",
+    ),
+    "경조금 지급기준.md": (
+        "5.2 경조금 지급기준",
+        "5.3 서류제출",
+        "5.4 지급제한",
+        "5.6 유효기간",
+    ),
+    "숙소지원금 운영 기준.md": (
+        "5.2 지원 대상",
+        "5.4 지원기준",
+        "5.3 지원 제외 대상",
+        "3.2 타지역 출신",
+        "3.3 무주택자",
+        "3.4 단신 근무자",
+        "4.1 숙소지원금 지급 권한",
+    ),
+}
+
+
+def overview_policy_evidence(policy_file):
+    """카드 답변에 실제 사용한 조항만 규정 순서에 맞춰 반환합니다."""
+    chunks, _, _ = load_policy_index()
+    selected = []
+    for path_term in OVERVIEW_EVIDENCE_PATHS[policy_file]:
+        for item in chunks:
+            if item["file"] == policy_file and path_term in item["path"]:
+                selected.append({
+                    "file": item["file"],
+                    "path": item["path"],
+                    "text": item["text"],
+                })
+    return selected
+
+
+def build_travel_overview_answer():
+    """개인 출장 조건을 되묻지 않고 국내출장의 세 지급 항목을 안내합니다."""
+    return """국내출장 여비 지급 기준을 항목별로 안내드립니다.
+
+1. 교통비
+- 전 직원 기준 철도는 새마을호 보통실 또는 KTX 보통실, 선박은 2등 정액을 적용합니다.
+- 항공료와 자동차 운임은 실비로 지급합니다.
+- 자가차량 이용 시 유류비, 통행료와 감가상각비(50원/km)를 실비로 지급하며, 통행료 영수증을 첨부·보관해야 합니다.
+- 회사가 제공한 교통수단처럼 별도 요금이 들지 않으면 교통비를 지급하지 않습니다.
+
+2. 소액경비
+- 전 직원 기준 1일 50,000원이며 여행일수에 따라 지급합니다.
+- 자가차량 또는 대중교통 이용 출장: 왕복 120km 이상 50,000원 / 왕복 50km 이상 25,000원 / 왕복 50km 미만 미지급
+- 자가차량 동승자: 왕복 120km 이상 식비 30,000원 / 왕복 50km 이상 식비 15,000원 / 왕복 50km 미만 미지급
+- 동일 지역 사업장 간 이동이 50km를 초과하면 근거리 출장 기준을 적용하고, 근거리 출장에서 경유지 때문에 50km를 초과한 경우에는 지급하지 않습니다.
+
+3. 숙박비
+- 전 직원 기준 1박당 100,000원 한도에서 실비로 지급하며 숙박 수에 따라 계산합니다.
+- 회사 주택시설을 무료로 이용하거나 자택에서 숙박하는 경우에는 지급하지 않습니다."""
+
+
 def build_ceremony_overview_answer():
     """개인별 판정 없이 경조금 지급기준의 전체 지급 항목을 요약합니다."""
     return """경조금 지급기준을 항목별로 안내드립니다.
@@ -854,6 +947,33 @@ def build_ceremony_overview_answer():
   - 가족관계증명서는 사망 대상 관계에 따라 본인·부모·배우자·배우자 부모 기준으로 제출합니다.
 
 일용직과 급여 지급이 정지된 직원은 지급 대상에서 제외됩니다."""
+
+
+def build_housing_overview_answer():
+    """지원 대상 목록과 실제 자격·제외 조건을 구분해 숙소지원금 기준을 안내합니다."""
+    return """숙소지원금의 지원 대상과 제외 조건을 구분해 안내드립니다.
+
+1. 지원 대상 범위
+- 신규 채용자(신입·경력·계약직·임시직 포함)
+- 타 지역 사업장으로 부임 명령을 받은 직원
+- 그룹사 인력교류자(전환 채용·파견 포함)
+- 주관부서 부서장이 지급을 승인한 직원
+
+2. 공통 자격 요건
+- 신규 채용이나 부임으로 사업장에 배치된 타지역 출신의 무주택 단신부임 직원이어야 합니다.
+- 단신 근무자는 근무지역 거주지에 혼자 거주하는 경우를 뜻하며, 가족이나 다른 직원과 함께 거주하면 해당하지 않습니다.
+- 서울 외 근무지는 근무 사업장 반경 25km 초과 지역을 타지역으로 봅니다. 서울 근무지는 규정에 열거된 경기·인천 일부 지역을 적용합니다.
+- 타지역에 해당하더라도 통근버스가 운행되면 지급을 중단합니다.
+
+3. 규정상 지원 제외 대상
+- P8 이상 임원
+- 파견비 지급 대상자
+- 국내 숙소지원금을 받던 해외주재원 부임 대상자: 부임일이 속한 달의 다음 달부터 제외
+- 연속 휴직기간이 6개월을 초과한 직원: 초과일이 속한 달의 다음 달부터 제외
+- 연속 파견기간이 6개월을 초과한 직원: 초과일이 속한 달의 다음 달부터 제외
+- 휴직이나 파견으로 제외된 기간도 전체 지원기간에는 포함합니다.
+
+지원 제외 대상이어도 주관부서 부서장이 승인하면 예외적으로 지원할 수 있으며, 최종 지급 권한은 주관부서 부서장에게 있습니다."""
 
 
 UNLISTED_CEREMONY_RELATIVES = (
@@ -1128,6 +1248,33 @@ GROUNDEDNESS_INSTRUCTIONS = (
 )
 
 
+GROUNDEDNESS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "verdict": {"type": "string", "enum": ["answerable", "clarify", "escalate"]},
+        "reason": {"type": "string"},
+        "missing": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "label": {"type": "string"},
+                    "options": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["label", "options"],
+                "additionalProperties": False,
+            },
+        },
+        "finding": {"type": "string"},
+        "intent": {"type": "string", "enum": list(POLICY_INTENTS)},
+        "relation": {"type": ["string", "null"]},
+        "evidence_ids": {"type": "array", "items": {"type": "integer"}},
+    },
+    "required": ["verdict", "reason", "missing", "finding", "intent", "relation", "evidence_ids"],
+    "additionalProperties": False,
+}
+
+
 def judge_groundedness(question, evidence, history=None):
     """검색 근거만으로 답할 수 있는지 LLM에 판정을 맡깁니다."""
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
@@ -1151,6 +1298,14 @@ def judge_groundedness(question, evidence, history=None):
         # 신청기한처럼 경과일로 갈리는 판정에는 기준일이 있어야 합니다.
         "instructions": f"{GROUNDEDNESS_INSTRUCTIONS}\n오늘 기준일은 {date.today().isoformat()}이다.",
         "input": [{"role": "user", "content": f"{prior_text}질문: {question}\n\n검색된 규정 근거:\n{evidence_text}"}],
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "groundedness_judgement",
+                "strict": True,
+                "schema": GROUNDEDNESS_SCHEMA,
+            }
+        },
     }
     request = Request(
         "https://api.openai.com/v1/responses",
@@ -1170,11 +1325,10 @@ def judge_groundedness(question, evidence, history=None):
             for content in output.get("content", []):
                 if content.get("type") == "output_text":
                     text += content.get("text", "")
-    match = re.search(r"\{.*\}", text, re.S)
-    if not match:
+    if not text:
         return {"verdict": "escalate", "reason": "판정 응답을 해석하지 못했습니다.", "missing": [], "evidence_ids": []}
     try:
-        result = json.loads(match.group(0))
+        result = json.loads(text)
     except json.JSONDecodeError:
         return {"verdict": "escalate", "reason": "판정 응답을 해석하지 못했습니다.", "missing": [], "evidence_ids": []}
     if result.get("verdict") not in ("answerable", "clarify", "escalate"):
@@ -1354,6 +1508,9 @@ def resolve_question_node(state: ConsultationState):
 def retrieve_policy_node(state: ConsultationState):
     """현재 제도 질문에 맞는 규정 근거를 검색합니다."""
     question = state.get("resolved") or state["question"]
+    policy_file = overview_policy_file(question)
+    if policy_file:
+        return {"candidate_evidence": overview_policy_evidence(policy_file)}
     # '돌아가셨다'와 일반적인 '지원금'만으로 물어도 경조금 사망 기준을 찾게 합니다.
     retrieval_question = question
     if ceremony_unlisted_relative(question):
@@ -1364,6 +1521,24 @@ def retrieve_policy_node(state: ConsultationState):
 def analyze_question_node(state: ConsultationState):
     """검색 근거로 답할 수 있는지와 함께 제도 영역·대상 관계를 한 번에 뽑습니다."""
     question = state.get("resolved") or state["question"]
+    policy_file = overview_policy_file(question)
+    if policy_file:
+        intent = {
+            "여비관리기준.md": "trip",
+            "경조금 지급기준.md": "ceremony",
+            "숙소지원금 운영 기준.md": "housing",
+        }[policy_file]
+        return {
+            "analysis": {
+                "verdict": "answerable",
+                "reason": "카드에서 요청한 규정 전체 안내입니다.",
+                "missing": [],
+                "finding": "",
+                "intent": intent,
+                "relation": None,
+                "evidence_ids": [],
+            }
+        }
     relation = ceremony_unlisted_relative(question)
     if relation:
         return {
@@ -1436,12 +1611,15 @@ def generate_answer_node(state: ConsultationState):
     history = state.get("history", [])
     candidate_evidence = state.get("candidate_evidence", [])
     missing = []
-    if is_ceremony_overview_question(question):
-        answer = build_ceremony_overview_answer()
-        used_evidence = [
-            item for item in candidate_evidence
-            if item.get("file") == "경조금 지급기준.md"
-        ]
+    policy_file = overview_policy_file(question)
+    if policy_file:
+        answer_builder = {
+            "여비관리기준.md": build_travel_overview_answer,
+            "경조금 지급기준.md": build_ceremony_overview_answer,
+            "숙소지원금 운영 기준.md": build_housing_overview_answer,
+        }[policy_file]
+        answer = answer_builder()
+        used_evidence = [item for item in candidate_evidence if item.get("file") == policy_file]
     elif ceremony_unlisted_relative(question):
         relation = ceremony_unlisted_relative(question)
         answer = build_unlisted_ceremony_answer(relation)

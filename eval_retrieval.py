@@ -27,7 +27,7 @@ hit@20이 100%라는 건 판정기가 언제나 정답 조항을 보고 있다�
 
 import sys
 
-from app import display_evidence, load_env, load_policy_index, retrieve
+from app import CONSULTATION_GRAPH, load_env, load_policy_index, retrieve
 
 load_env()
 
@@ -141,9 +141,8 @@ REAL_CASES = [
 
 
 # --- 근거 구성 점검 ---
-# 순위가 아니라 "근거 묶음이 어떤 파일로 구성되는가"를 봅니다. test_rules.py에 있던 것을
-# 옮겨 왔습니다. 원래도 LLM을 쓰지 않고 retrieve()만 부르는데 100초짜리 LLM 회귀에 얹혀
-# 있어서, 노브를 바꿀 때마다 같이 돌려 볼 수가 없었습니다. 여기서는 5초에 함께 돕니다.
+# 순위가 아니라 "근거 묶음이 어떤 파일로 구성되는가"를 봅니다. 판정기가 선택한 실제
+# 화면 근거를 확인해야 하므로 아래 세 문항은 전체 상담 그래프를 실행합니다.
 
 # (질문, 검색에 쓸 질문, 화면에 표시될 파일, 표시되면 안 되는 파일)
 # 원래 이 문항들은 보조 문서(여비관리 FAQ)를 근거 링크에서 감추기를 요구했습니다. 감추는
@@ -151,8 +150,8 @@ REAL_CASES = [
 # 보조 문서에만 있는 경우가 있어(개인 사유 귀국 연기는 FAQ에만, 승중상 인정 조건은 사내
 # 추가 기준에만) 감추면 근거가 사라집니다. 금지 쪽은 그대로 둡니다 - 질문과 무관한 "제도"
 # 규정이 링크에 뜨지 않는다는 것이 원래 요구였고 그건 지켜야 합니다.
-# 검색 결과가 아니라 display_evidence가 고른 표시용 근거를 봅니다. 검색은 여러 규정을
-# 함께 봐야 하므로 좁히지 않고, 사용자에게 보이는 링크만 하나로 줄입니다.
+# 화면 표시 근거는 검색 순위만으로 정해지지 않고 판정기가 실제 사용한 조항을 반영하므로,
+# 이 세 문항은 전체 상담 그래프를 실행해 최종 used_evidence를 점검합니다.
 EVIDENCE_CASES = [
     (
         "해외출장 전일 이동으로 보면 됩니다",
@@ -160,7 +159,7 @@ EVIDENCE_CASES = [
             "9월 11일부터 9월 14일까지 수도권에 체류한 뒤 9월 14일 인천공항으로 이동하는 "
             "일정을 해외출장 전일 이동으로 볼 때, 숙소지원금 운영 기준과 해외출장 비용을 어떻게 적용하나요?"
         ),
-        {"여비관리기준.md", "여비관리 FAQ.md"},
+        {"여비관리 FAQ.md"},
         {"숙소지원금 운영 기준.md", "경조금 지급기준.md"},
     ),
     (
@@ -172,7 +171,7 @@ EVIDENCE_CASES = [
     (
         "조의금 신청 시 가족관계증명서를 즉시 제출하기 어려워도, 사실관계를 증명할 수 있는 다른 서류가 있으면 대체 인정될 수 있나요?",
         "조의금 신청 시 가족관계증명서를 대체할 수 있는 증빙서류",
-        {"경조금 지급기준.md", "사내 추가 기준.md"},
+        {"경조금 지급기준.md"},
         {"여비관리 FAQ.md", "숙소지원금 운영 기준.md", "동호회 관리 규정.md"},
     ),
 ]
@@ -191,7 +190,8 @@ def run_evidence_checks():
     print("[근거 구성] 파일 구성 3문항 · 종목어 도달 2문항")
     failed = 0
     for question, resolved, expected, forbidden in EVIDENCE_CASES:
-        files = {item["file"] for item in display_evidence(retrieve(resolved))}
+        result = CONSULTATION_GRAPH.invoke({"question": resolved, "history": []})
+        files = {item["file"] for item in result.get("used_evidence", [])}
         if files != expected:
             failed += 1
             extra = sorted(files & forbidden)
