@@ -11,6 +11,7 @@ from app import (
     CONSULTATION_GRAPH,
     attach_referenced_chunks,
     build_dispatch_calculation_answer,
+    ceremony_unlisted_relative,
     generate_answer_node,
     load_env,
     resolve_question,
@@ -82,6 +83,12 @@ PROTECTED_CASES = [
         "고모가 돌아가셨는데 경조금 받을 수 있어?",
         ("노사발전그룹", "주관 부서 확인 필요"),
         "- 지원금:",
+    ),
+    # 수식어 없는 삼촌은 본인 부모의 형제로 해석하며, 직원·배우자의 형제자매와 구분한다.
+    (
+        "삼촌이 돌아가셨는데 지원금 나와?",
+        ("본인의 삼촌", "부모님의 형제", "주관 부서 확인 필요"),
+        ("300,000원", "확인이 필요한 내용", "숙소지원금"),
     ),
     # 경조금 지급기준 5.2·5.6: 부모 환갑은 생년월일 확인 후 3개월 기한을 판단한다.
     (
@@ -455,6 +462,23 @@ def check_missing_chips():
     print("통과 [D-02] missing 칩 개수 제한 및 escalate 시 미포함")
 
 
+def check_ceremony_relative_normalization():
+    """수식어 없는 부모 세대 친족은 본인 기준, 배우자가 명시된 경우만 배우자 기준으로 봅니다."""
+    own_uncle = ceremony_unlisted_relative("삼촌이 돌아가셨는데 지원금 나와?")
+    assert own_uncle and own_uncle["label"] == "본인의 삼촌", own_uncle
+    assert own_uncle["relation"] == "본인 부모의 형제·자매", own_uncle
+
+    spouse_uncle = ceremony_unlisted_relative("배우자의 삼촌이 돌아가셨는데 지원금 나와?")
+    assert spouse_uncle and spouse_uncle["label"] == "배우자의 삼촌", spouse_uncle
+    assert spouse_uncle["relation"] == "배우자 부모의 형제·자매", spouse_uncle
+
+    own_uncle_with_spouse = ceremony_unlisted_relative("삼촌이 돌아가셨는데 배우자가 대신 문의해요")
+    assert own_uncle_with_spouse and own_uncle_with_spouse["label"] == "본인의 삼촌", own_uncle_with_spouse
+
+    assert ceremony_unlisted_relative("형이 돌아가셨는데 경조금 나와?") is None
+    print("통과 [G-00] 경조 친족 관계 기준 정규화")
+
+
 def check_dispatch_calculation():
     """사용자가 확정한 장기 파견 계산식과 담당 부서 확인 안내를 API 없이 검증합니다."""
     overview_question = "여비관리 기준에서 출장·파견·부임 관련 지원 대상, 지급 항목, 한도 및 신청 절차를 알려줘."
@@ -593,6 +617,7 @@ def main():
     """보호 동작과 알려진 오답을 실행하고 전체 결과를 요약합니다."""
     check_reference_expansion()
     check_missing_chips()
+    check_ceremony_relative_normalization()
     check_dispatch_calculation()
     check_used_evidence_selection()
     protected = run_cases("A", PROTECTED_CASES)

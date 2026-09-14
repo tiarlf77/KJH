@@ -856,6 +856,73 @@ def build_ceremony_overview_answer():
 일용직과 급여 지급이 정지된 직원은 지급 대상에서 제외됩니다."""
 
 
+UNLISTED_CEREMONY_RELATIVES = (
+    "큰아버지", "작은아버지", "큰아빠", "작은아빠", "외삼촌", "삼촌", "고모", "이모", "백부", "숙부",
+)
+DEATH_EVENT_TERMS = ("돌아가", "사망", "별세", "세상을 떠", "부고")
+SPOUSE_SIDE_TERMS = ("배우자", "아내", "남편", "처가", "시댁")
+
+
+def ceremony_unlisted_relative(question):
+    """지급표에 없는 부모 세대 친족과 사용자 기준 관계를 결정합니다."""
+    normalized = re.sub(r"\s+", "", question)
+    if not any(term in normalized for term in DEATH_EVENT_TERMS):
+        return None
+    relative = next((term for term in UNLISTED_CEREMONY_RELATIVES if term in normalized), None)
+    if not relative:
+        return None
+    spouse_side = any(
+        marker in normalized
+        for side in SPOUSE_SIDE_TERMS
+        for marker in (f"{side}{relative}", f"{side}의{relative}", f"{side}쪽{relative}")
+    )
+    owner = "배우자" if spouse_side else "본인"
+    return {
+        "relative": relative,
+        "label": f"{owner}의 {relative}",
+        "relation": f"{owner} 부모의 형제·자매",
+        "parent_label": "배우자 부모님의 형제·자매" if spouse_side else "부모님의 형제·자매",
+        "spouse_side": spouse_side,
+    }
+
+
+def build_unlisted_ceremony_answer(relation):
+    """부모의 형제자매를 직원·배우자의 형제자매 지급 항목과 구분해 안내합니다."""
+    if relation["spouse_side"]:
+        introduction = f"말씀하신 관계는 {relation['label']}, 즉 {relation['parent_label']}입니다."
+    else:
+        introduction = (
+            f"별도 배우자 측 표현이 없으므로 {relation['label']}, 즉 {relation['parent_label']}로 이해했습니다."
+        )
+    return (
+        f"{introduction}\n\n"
+        "규정 확인\n"
+        f"- 관계: {relation['relation']}\n"
+        "- 판정: 경조금 지급표에 명시되지 않은 관계\n"
+        "- 처리: 주관 부서 확인 필요\n\n"
+        "경조금 지급표의 ‘본인 및 배우자의 형제·자매’는 직원 본인 또는 배우자의 "
+        f"형제·자매를 뜻하며, {relation['parent_label']}인 {relation['relative']}에게는 적용되지 않습니다. "
+        "현재 제공된 기준만으로 별도 지급 여부를 확정할 수 없으므로 주관 부서 확인이 필요합니다."
+    )
+
+
+def select_unlisted_ceremony_evidence(candidate_evidence):
+    """지급표 미등재 판단과 담당 부서 확인을 뒷받침하는 근거만 표시합니다."""
+    selected = [
+        item for item in candidate_evidence
+        if (
+            item.get("file") == "경조금 지급기준.md"
+            and "5.2 경조금 지급기준" in item.get("path", "")
+        ) or (
+            item.get("file") == "사내 추가 기준.md"
+            and "경조금 지급대상이 아닌 관계" in item.get("path", "")
+        )
+    ]
+    if selected:
+        return selected
+    return [item for item in candidate_evidence if item.get("file") == "경조금 지급기준.md"]
+
+
 
 
 RANK_REFERENCE_PATTERN = re.compile(r"(?:\uC784\uC6D0|P\d+|\uC2E4\uC7A5|\uD2B8\uB7AD\uc7a5|\ubd80\uc7a5)", re.IGNORECASE)
@@ -1041,8 +1108,12 @@ GROUNDEDNESS_INSTRUCTIONS = (
     "회사가 비용을 부담하는지 묻는 질문은 규정에 해당 항목이 없더라도 가장 가까운 영역을 고른다. "
     "'주차 위반 과태료를 회사가 내주는지'는 other가 아니라 trip이다.\n"
     "- relation: 경조사·경조금 질문에서 사유가 발생한 대상과 사용자의 관계. "
-    "본인, 본인 부모, 배우자 부모, 본인 형제·자매, 배우자 형제·자매, 자녀, 조부모처럼 적는다. "
+    "본인, 본인 부모, 배우자 부모, 본인 형제·자매, 배우자 형제·자매, 본인 부모의 형제·자매, "
+    "배우자 부모의 형제·자매, 자녀, 조부모처럼 적는다. "
     "본인이 당사자면 '본인'이다. 해당 없으면 null.\n"
+    "수식어 없이 삼촌·외삼촌·고모·이모라고 하면 사용자 본인 부모의 형제·자매로 해석한다. "
+    "배우자의 삼촌처럼 배우자 관계가 명시된 경우에만 배우자 부모의 형제·자매로 해석한다. "
+    "부모의 형제·자매를 사용자 본인 또는 배우자의 형제·자매 지급 항목과 동일시하지 않는다.\n"
     "- finding: clarify일 때, 근거만으로 이미 확정할 수 있는 사실을 한두 문장으로 적는다. "
     "기한이 지났다거나 원칙은 무엇이고 어떤 예외가 남았는지처럼 사용자가 바로 알아야 할 내용이다. "
     "확정할 수 있는 것이 없으면 빈 문자열.\n"
@@ -1282,12 +1353,30 @@ def resolve_question_node(state: ConsultationState):
 
 def retrieve_policy_node(state: ConsultationState):
     """현재 제도 질문에 맞는 규정 근거를 검색합니다."""
-    return {"candidate_evidence": retrieve(state.get("resolved") or state["question"])}
+    question = state.get("resolved") or state["question"]
+    # '돌아가셨다'와 일반적인 '지원금'만으로 물어도 경조금 사망 기준을 찾게 합니다.
+    retrieval_question = question
+    if ceremony_unlisted_relative(question):
+        retrieval_question = f"{question} 사망 경조금 조의금 지급 대상"
+    return {"candidate_evidence": retrieve(retrieval_question)}
 
 
 def analyze_question_node(state: ConsultationState):
     """검색 근거로 답할 수 있는지와 함께 제도 영역·대상 관계를 한 번에 뽑습니다."""
     question = state.get("resolved") or state["question"]
+    relation = ceremony_unlisted_relative(question)
+    if relation:
+        return {
+            "analysis": {
+                "verdict": "escalate",
+                "reason": "해당 관계는 경조금 지급표에 명시되어 있지 않습니다.",
+                "missing": [],
+                "finding": "",
+                "intent": "ceremony",
+                "relation": relation["relation"],
+                "evidence_ids": [],
+            }
+        }
     return {
         "analysis": judge_groundedness(
             question,
@@ -1353,6 +1442,10 @@ def generate_answer_node(state: ConsultationState):
             item for item in candidate_evidence
             if item.get("file") == "경조금 지급기준.md"
         ]
+    elif ceremony_unlisted_relative(question):
+        relation = ceremony_unlisted_relative(question)
+        answer = build_unlisted_ceremony_answer(relation)
+        used_evidence = select_unlisted_ceremony_evidence(candidate_evidence)
     else:
         calculation_answer = build_dispatch_calculation_answer(question)
         if calculation_answer:
