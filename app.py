@@ -815,6 +815,47 @@ def is_club_application_question(question):
     return "동호회" in question and any(word in question for word in application_words)
 
 
+def is_ceremony_overview_question(question):
+    """경조금 카드처럼 규정 전체의 네 가지 항목을 함께 묻는 질문을 구분합니다."""
+    normalized = re.sub(r"\s+", "", question)
+    required_terms = ("지급대상", "금액", "신청기한", "필요서류")
+    return "경조금" in normalized and all(term in normalized for term in required_terms)
+
+
+def build_ceremony_overview_answer():
+    """개인별 판정 없이 경조금 지급기준의 전체 지급 항목을 요약합니다."""
+    return """경조금 지급기준을 항목별로 안내드립니다.
+
+1. 지급 대상
+- 결혼: 본인, 자녀, 본인·배우자의 형제·자매
+- 회갑: 본인 부모, 배우자 부모
+- 출산장려금: 직원 또는 직원 배우자의 출산, 만 6세 미만 자녀 입양
+- 사망: 본인, 배우자, 본인·배우자의 부모, 승중상, 본인·배우자의 조부모, 본인 외조부모, 자녀, 본인·배우자의 형제·자매
+
+2. 금액
+- 결혼: 본인 2,000,000원 / 자녀 300,000원 / 본인·배우자의 형제·자매 200,000원
+- 회갑: 본인·배우자 부모 200,000원
+- 출산장려금: 첫째 3,000,000원 / 둘째 7,000,000원 / 셋째 이상 10,000,000원
+  - 사내부부는 1명에게만 지급합니다.
+- 사망: 본인 5,000,000원 / 배우자 2,000,000원 / 본인·배우자의 부모 및 자녀 각 1,000,000원 / 승중상 500,000원 / 본인·배우자의 조부모·본인 외조부모·본인·배우자의 형제·자매 각 300,000원
+
+3. 신청 기한
+- 경조금 청구권 발생일, 즉 사유 발생일로부터 3개월 이내에 신청해야 합니다.
+
+4. 필요 서류
+- 본인 결혼: 청첩장, 혼인신고서
+- 형제·자매 결혼: 부모 기준 가족관계증명서, 청첩장
+- 배우자 형제·자매 결혼: 본인 가족관계증명서, 배우자 부모 기준 가족관계증명서, 청첩장
+- 자녀 결혼: 본인 가족관계증명서, 청첩장
+- 본인 부모 회갑: 본인 가족관계증명서
+- 배우자 부모 회갑: 배우자 기준 가족관계증명서
+- 출산장려금: 출생증명서, 주민등록등본
+- 사망: 기본증명서(상세, 사망일 표기 확인), 가족관계증명서, 부고장
+  - 가족관계증명서는 사망 대상 관계에 따라 본인·부모·배우자·배우자 부모 기준으로 제출합니다.
+
+일용직과 급여 지급이 정지된 직원은 지급 대상에서 제외됩니다."""
+
+
 
 
 RANK_REFERENCE_PATTERN = re.compile(r"(?:\uC784\uC6D0|P\d+|\uC2E4\uC7A5|\uD2B8\uB7AD\uc7a5|\ubd80\uc7a5)", re.IGNORECASE)
@@ -1306,31 +1347,38 @@ def generate_answer_node(state: ConsultationState):
     history = state.get("history", [])
     candidate_evidence = state.get("candidate_evidence", [])
     missing = []
-    calculation_answer = build_dispatch_calculation_answer(question)
-    if calculation_answer:
-        answer = calculation_answer
+    if is_ceremony_overview_question(question):
+        answer = build_ceremony_overview_answer()
         used_evidence = [
             item for item in candidate_evidence
-            if item.get("file") in {"여비관리기준.md", "사내 추가 기준.md"}
+            if item.get("file") == "경조금 지급기준.md"
         ]
-    elif not candidate_evidence:
-        answer = build_unknown_policy_answer(question)
-        used_evidence = []
     else:
-        judgement = state.get("analysis") or judge_groundedness(question, candidate_evidence, history)
-        used_evidence = select_used_evidence(question, candidate_evidence, judgement)
-        verdict = judgement["verdict"]
-        if verdict == "clarify":
-            missing = judgement.get("missing", [])
-            answer = build_clarify_answer(missing, judgement.get("finding", ""))
-        elif verdict == "escalate":
-            # 복리후생과 무관한 질문은 담당 부서로 넘기지 않고 상담 범위를 안내합니다.
-            if judgement.get("intent") == "other":
-                answer = build_clarification_answer(question)
-            else:
-                answer = build_escalation_answer(judgement.get("reason", ""), used_evidence)
+        calculation_answer = build_dispatch_calculation_answer(question)
+        if calculation_answer:
+            answer = calculation_answer
+            used_evidence = [
+                item for item in candidate_evidence
+                if item.get("file") in {"여비관리기준.md", "사내 추가 기준.md"}
+            ]
+        elif not candidate_evidence:
+            answer = build_unknown_policy_answer(question)
+            used_evidence = []
         else:
-            answer = call_openai(question, used_evidence, history)
+            judgement = state.get("analysis") or judge_groundedness(question, candidate_evidence, history)
+            used_evidence = select_used_evidence(question, candidate_evidence, judgement)
+            verdict = judgement["verdict"]
+            if verdict == "clarify":
+                missing = judgement.get("missing", [])
+                answer = build_clarify_answer(missing, judgement.get("finding", ""))
+            elif verdict == "escalate":
+                # 복리후생과 무관한 질문은 담당 부서로 넘기지 않고 상담 범위를 안내합니다.
+                if judgement.get("intent") == "other":
+                    answer = build_clarification_answer(question)
+                else:
+                    answer = build_escalation_answer(judgement.get("reason", ""), used_evidence)
+            else:
+                answer = call_openai(question, used_evidence, history)
     answer = append_final_review_notice(answer)
     result = {"answer": answer, "used_evidence": used_evidence}
     # 동호회 신규 신청 문의에는 답변 경로와 무관하게 메일 초안 버튼을 띄웁니다.
