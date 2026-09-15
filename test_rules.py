@@ -12,6 +12,7 @@ from app import (
     GROUNDEDNESS_SCHEMA,
     attach_referenced_chunks,
     build_dispatch_calculation_answer,
+    extract_dispatch_days,
     ceremony_unlisted_relative,
     generate_answer_node,
     load_env,
@@ -531,6 +532,36 @@ def check_dispatch_calculation():
     assert build_dispatch_calculation_answer(overview_question) is None, (
         "전체 기준 안내의 '지급 항목'을 파견경비 계산 요청으로 처리했습니다."
     )
+
+    # 달력의 날짜를 장기 파견기간으로 읽으면 전일 이동 지원 문의가 21박 계산으로 빠집니다.
+    assert extract_dispatch_days("출장·파견 시작일: 21일") is None, (
+        "달력 날짜 21일을 파견기간 21일로 오인했습니다."
+    )
+    assert extract_dispatch_days("파견기간 21일") == 21
+    assert extract_dispatch_days("21일간 파견") == 21
+
+    previous_day_history = [
+        {
+            "role": "user",
+            "content": "21일 새벽 비행기라 전날 미리 움직이고 싶은데 숙소비랑 교통비 지원 되나요?",
+        },
+        {
+            "role": "assistant",
+            "content": (
+                "파견 시작일 전날 이동은 교통비·숙박비·소액경비 지급 기준이 있습니다. "
+                "이동 목적, 출장·파견 시작일, 이동 수단을 알려주세요."
+            ),
+        },
+    ]
+    previous_day_question = "이동 목적: 출장\n출장·파견 시작일: 21일\n이동 수단: 자가차량"
+    previous_day = CONSULTATION_GRAPH.invoke({
+        "question": previous_day_question,
+        "history": previous_day_history,
+    })["answer"]
+    for required in ("전날", "숙박비", "교통비", "자가차량"):
+        assert required in previous_day, f"전일 이동 지원 안내에 필요한 내용이 없습니다: {required!r} / {previous_day!r}"
+    for forbidden in ("파견기간은 21일", "21박", "실제 숙박일수"):
+        assert forbidden not in previous_day, f"날짜를 파견기간으로 오인했습니다: {forbidden!r} / {previous_day!r}"
 
     home_location = build_dispatch_calculation_answer(
         "자택이 있는 지역으로 파견 명령을 받았는데 파견비를 받을 수 있나요?"

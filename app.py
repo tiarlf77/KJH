@@ -514,9 +514,19 @@ def append_final_review_notice(answer):
 
 def extract_dispatch_days(question):
     """자연어 질문에서 파견기간을 일수로 읽습니다. 한 달은 계산 기준상 30일로 봅니다."""
-    day_match = re.search(r"(?<!\d)(\d{1,4})\s*일(?:간)?", question)
-    if day_match:
-        return int(day_match.group(1))
+    # '시작일: 21일' 같은 달력 날짜는 기간이 아닙니다. '일간' 또는 '파견기간'처럼
+    # 기간임을 드러내는 표현이 붙은 숫자만 계산 일수로 사용합니다.
+    day_patterns = (
+        r"파견\s*기간\s*[:：]?\s*(\d{1,4})\s*일(?:간)?",
+        r"파견\s*(\d{1,4})\s*일(?:간)?",
+        r"(?<!\d)(\d{1,4})\s*일간",
+        r"(?<!\d)(\d{1,4})\s*일\s*파견",
+        r"(?<!\d)(\d{1,4})\s*일\s*[,·]?\s*(?:숙박\s*)?\d{1,4}\s*박",
+    )
+    for pattern in day_patterns:
+        day_match = re.search(pattern, question)
+        if day_match:
+            return int(day_match.group(1))
     month_match = re.search(r"(?<!\d)(\d{1,2})\s*(?:개월|달)", question)
     if month_match:
         return int(month_match.group(1)) * 30
@@ -581,6 +591,48 @@ def is_dispatch_calculation_question(question):
     return "파견" in question and (
         any(word in question for word in calculation_words)
         or is_monthly_breakdown_question(question)
+    )
+
+
+def is_previous_day_travel_support_question(question, history=None):
+    """출장·파견 전날 이동의 여비 지원 여부를 묻는 대화인지 확인합니다."""
+    user_context = " ".join(
+        str(item.get("content", ""))
+        for item in (history or [])[-6:]
+        if item.get("role") == "user"
+    )
+    normalized = re.sub(r"\s+", "", f"{user_context} {question}")
+    has_previous_day = any(term in normalized for term in ("전날", "전일"))
+    has_travel = any(term in normalized for term in ("출장", "파견", "비행기", "항공편", "공항"))
+    has_support = any(term in normalized for term in ("지원", "지급", "정산", "숙소비", "숙박비", "교통비"))
+    is_personal = any(term in normalized for term in ("개인사유", "개인일정", "여행겸", "주말을보내"))
+    return has_previous_day and has_travel and has_support and not is_personal
+
+
+def build_previous_day_travel_answer(question, history=None):
+    """전일 이동을 장기 파견 계산과 분리해 지급 항목을 바로 안내합니다."""
+    context = " ".join(
+        [str(item.get("content", "")) for item in (history or [])[-6:] if item.get("role") == "user"]
+        + [question]
+    )
+    vehicle_line = ""
+    if "자가차량" in re.sub(r"\s+", "", context):
+        vehicle_line = (
+            "\n- 자가차량 교통비: 업무상 이용이 인정되면 유류비·통행료·감가상각비(50원/km)를 "
+            "실비로 정산하며, 통행료 영수증을 첨부·보관해야 합니다."
+        )
+    return (
+        "해외출장을 위해 새벽 비행기를 이용해야 해서 전날 이동이 불가피한 경우에는 "
+        "전날 발생한 숙박비·시외교통비·1일분 소액경비가 지급 대상입니다. "
+        "파견이라면 파견 시작일 전날 이동에도 교통비·숙박비·소액경비를 지급합니다.\n\n"
+        "적용 기준\n"
+        "- 숙박비: 전 직원은 1박당 100,000원 한도에서 실비 지급\n"
+        "- 교통비: 실제 이용한 교통수단의 인정 비용을 실비 지급"
+        f"{vehicle_line}\n"
+        "- 소액경비: 자가차량 또는 대중교통 이용 시 왕복 거리에 따라 차등 지급\n\n"
+        "국내출장이라면 전날 이동이 승인된 출장 일정과 여행일수에 포함되는지 확인해야 합니다. "
+        "회사 승인 출장·파견 일정에 따른 전날 이동이어야 하며, 개인 일정 때문에 미리 이동한 경우에는 "
+        "같은 기준을 적용할 수 없습니다."
     )
 
 
@@ -935,6 +987,17 @@ def overview_policy_evidence(policy_file):
 def birth_grant_evidence():
     """출산장려금의 지급표·서류·제한·기한 조항을 함께 반환합니다."""
     return policy_evidence_by_paths("경조금 지급기준.md", BIRTH_GRANT_EVIDENCE_PATHS)
+
+
+def previous_day_travel_evidence():
+    """전일 이동 답변에 직접 사용한 여비 조항만 반환합니다."""
+    return policy_evidence_by_paths("여비관리기준.md", (
+        "5.10.2 소액경비 및 숙박비",
+        "5.14.2 자가차량 또는 대중교통 이용 시",
+        "5.15.1 일반 파견 근무자",
+        "5.17.1 지급기준",
+        "별첨 1. 국내여비기준표",
+    ))
 
 
 def build_travel_overview_answer():
@@ -1508,6 +1571,14 @@ def resolve_question(question, history):
     '출장'이 걸려 이력이 끊겼고, "부모님 상당했는데"는 아무것도 안 걸려 지난 주제가 남았습니다.
     후속인지 아닌지를 코드가 정하지 않고, 다시 쓴 질문 하나를 검색·판정·생성이 함께 씁니다.
     """
+    if is_previous_day_travel_support_question(question, history):
+        prior_user = " ".join(
+            str(item.get("content", ""))
+            for item in (history or [])[-6:]
+            if item.get("role") == "user"
+        )
+        return f"출장·파견 전일 이동 지원 문의. {prior_user} {question}".strip()
+
     dispatch_followup = resolve_dispatch_followup(question, history)
     if dispatch_followup:
         return dispatch_followup
@@ -1574,6 +1645,8 @@ def resolve_question_node(state: ConsultationState):
 def retrieve_policy_node(state: ConsultationState):
     """현재 제도 질문에 맞는 규정 근거를 검색합니다."""
     question = state.get("resolved") or state["question"]
+    if is_previous_day_travel_support_question(state["question"], state.get("history", [])):
+        return {"candidate_evidence": previous_day_travel_evidence()}
     if is_birth_grant_question(question):
         return {"candidate_evidence": birth_grant_evidence()}
     policy_file = overview_policy_file(question)
@@ -1589,6 +1662,18 @@ def retrieve_policy_node(state: ConsultationState):
 def analyze_question_node(state: ConsultationState):
     """검색 근거로 답할 수 있는지와 함께 제도 영역·대상 관계를 한 번에 뽑습니다."""
     question = state.get("resolved") or state["question"]
+    if is_previous_day_travel_support_question(state["question"], state.get("history", [])):
+        return {
+            "analysis": {
+                "verdict": "answerable",
+                "reason": "출장·파견 전일 이동의 정해진 지급 기준 안내입니다.",
+                "missing": [],
+                "finding": "",
+                "intent": "trip",
+                "relation": None,
+                "evidence_ids": [],
+            }
+        }
     if is_birth_grant_question(question):
         return {
             "analysis": {
@@ -1692,7 +1777,10 @@ def generate_answer_node(state: ConsultationState):
     candidate_evidence = state.get("candidate_evidence", [])
     missing = []
     policy_file = overview_policy_file(question)
-    if is_birth_grant_question(question):
+    if is_previous_day_travel_support_question(state["question"], history):
+        answer = build_previous_day_travel_answer(state["question"], history)
+        used_evidence = previous_day_travel_evidence()
+    elif is_birth_grant_question(question):
         answer = build_birth_grant_answer()
         used_evidence = [
             item for item in candidate_evidence
