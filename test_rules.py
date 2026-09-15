@@ -703,6 +703,25 @@ def check_used_evidence_selection():
     print("통과 [F-00] 실제 사용 근거 번호 검증·fallback")
 
 
+def check_previous_day_travel_citation():
+    """화면이 파일별 첫 근거를 표시하므로 직접 적용 조항과 원문을 함께 확인합니다."""
+    for question in (
+        "해외출장을 위해 전날 미리 이동해야 하는 경우에도 교통비와 숙박비가 지급되나요?",
+        "해외출장 새벽 비행기라 전일 이동해야 하는데 숙박비 지급되나요?",
+    ):
+        result = CONSULTATION_GRAPH.invoke({"question": question, "history": []})
+        primary = result["used_evidence"][0]
+        assert primary["file"] == "여비관리기준.md"
+        assert primary["path"].split(">")[-1].strip() == "5.17.1 지급기준 제8항", primary["path"]
+        assert primary["text"] == (
+            "8. 해외출장을 위해 부득이하게 전일 이동해야 하는 경우 국내여비관리 기준에 따라 "
+            "숙박비, 시외교통비 및 1일분의 소액경비를 지급한다."
+        ), primary["text"]
+        assert "새벽 비행기를 이용해야 해서" not in result["answer"]
+        assert "5.17.1 지급기준 제8항" in result["answer"]
+    print("통과 [F-전일] 해외출장 전일 이동 제8항 근거 및 조건")
+
+
 def main():
     """보호 동작과 알려진 오답을 실행하고 전체 결과를 요약합니다."""
     check_reference_expansion()
@@ -711,6 +730,7 @@ def main():
     check_card_overviews_and_schema()
     check_dispatch_calculation()
     check_used_evidence_selection()
+    check_previous_day_travel_citation()
     protected = run_cases("A", PROTECTED_CASES)
     unresolved = run_cases("B", KNOWN_FAILURE_CASES)
     continuity = run_cases("C", CONTINUITY_CASES, check_continuity)

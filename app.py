@@ -622,8 +622,8 @@ def build_previous_day_travel_answer(question, history=None):
             "실비로 정산하며, 통행료 영수증을 첨부·보관해야 합니다."
         )
     return (
-        "해외출장을 위해 새벽 비행기를 이용해야 해서 전날 이동이 불가피한 경우에는 "
-        "전날 발생한 숙박비·시외교통비·1일분 소액경비가 지급 대상입니다. "
+        "여비관리기준 5.17.1 지급기준 제8항에 따라, 해외출장을 위해 부득이하게 전날 이동해야 하는 경우에는 "
+        "국내여비관리 기준에 따라 숙박비·시외교통비·1일분 소액경비를 지급합니다. "
         "파견이라면 파견 시작일 전날 이동에도 교통비·숙박비·소액경비를 지급합니다.\n\n"
         "적용 기준\n"
         "- 숙박비: 전 직원은 1박당 100,000원 한도에서 실비 지급\n"
@@ -991,11 +991,16 @@ def birth_grant_evidence():
 
 def previous_day_travel_evidence():
     """전일 이동 답변에 직접 사용한 여비 조항만 반환합니다."""
-    return policy_evidence_by_paths("여비관리기준.md", (
+    # 화면은 같은 파일의 첫 근거를 표시하므로 지급 사유를 정한 제8항을 먼저 둡니다.
+    primary = []
+    for item in policy_evidence_by_paths("여비관리기준.md", ("5.17.1 지급기준",)):
+        for line in item["text"].splitlines():
+            if line.startswith("8. "):
+                primary.append({**item, "path": item["path"] + " 제8항", "text": line})
+    return primary + policy_evidence_by_paths("여비관리기준.md", (
         "5.10.2 소액경비 및 숙박비",
         "5.14.2 자가차량 또는 대중교통 이용 시",
         "5.15.1 일반 파견 근무자",
-        "5.17.1 지급기준",
         "별첨 1. 국내여비기준표",
     ))
 
